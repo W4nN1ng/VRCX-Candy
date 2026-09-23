@@ -1,7 +1,7 @@
 From 53a45002e58b04d3e13447e20d4eba61af120b6d Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?=E6=99=9A=E5=87=9DW4nN1ng?= <wn2276519232@gmail.com>
 Date: Wed, 23 Sep 2026 11:55:14 +0800
-Subject: [PATCH 1/2] Add per user bio history to the user dialog
+Subject: [PATCH 1/3] Add per user bio history to the user dialog
 
 VRCX already wrote every detected bio change into the feed_bio table but
 only surfaced it as a global feed stream, so a player profile could never

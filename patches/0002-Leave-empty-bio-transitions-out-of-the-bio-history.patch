@@ -1,7 +1,7 @@
 From e5a9a76a73c421251908f82c34e94ee6e362c3b5 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?=E6=99=9A=E5=87=9DW4nN1ng?= <wn2276519232@gmail.com>
 Date: Wed, 23 Sep 2026 12:11:12 +0800
-Subject: [PATCH 2/2] Leave empty bio transitions out of the bio history
+Subject: [PATCH 2/3] Leave empty bio transitions out of the bio history
 
 Checking a real database showed 81 of 176 feed_bio rows record a transition
 to an empty bio, 30 distinct friends inside the same 13 seconds. The API

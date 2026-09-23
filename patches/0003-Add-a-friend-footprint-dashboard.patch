@@ -1,0 +1,2264 @@
+From f4e7c485ccdfe10cc9946add7b20aedd29a8cad3 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=E6=99=9A=E5=87=9DW4nN1ng?= <wn2276519232@gmail.com>
+Date: Wed, 23 Sep 2026 14:47:19 +0800
+Subject: [PATCH 3/3] Add a friend footprint dashboard
+
+Picking a friend from the new Charts tab now answers where they have been,
+how often, and when. It aggregates the feed_gps rows VRCX already records
+into merged visits, so hopping instances inside one world no longer reads as
+a new trip, and splits out four things the raw table cannot answer directly:
+the most visited worlds, a weekday by hour heat map of when they are around,
+the groups they play in, and a day grouped timeline of recent trips.
+
+Dwell time is measured from the gap between consecutive rows rather than the
+stored time column, because that column resets on instance hops and only
+gives a lower bound. Gaps over twelve hours are treated as VRCX having been
+closed, so an offline weekend does not inflate one world, and those visits
+are labelled as unknown instead of wrong.
+
+Private rooms are kept out of the world ranking since they carry no name and
+would otherwise top every list, and a profile shortcut jumps straight to that
+player's footprints.
+---
+ .../dialogs/UserDialog/UserDialogInfoTab.vue  |  19 +-
+ .../nav-menu/__tests__/navMenuUtils.test.js   |   8 +-
+ src/components/nav-menu/navLayoutDefaults.js  |   2 +-
+ src/components/nav-menu/navMenuUtils.js       |   2 +-
+ src/localization/en.json                      |  53 ++
+ src/localization/es.json                      |  53 ++
+ src/localization/fr.json                      |  53 ++
+ src/localization/hu.json                      |  53 ++
+ src/localization/ja.json                      |  53 ++
+ src/localization/pl.json                      |  53 ++
+ src/localization/pt.json                      |  53 ++
+ src/localization/ru.json                      |  53 ++
+ src/localization/th.json                      |  53 ++
+ src/localization/zh-CN.json                   |  53 ++
+ src/localization/zh-TW.json                   |  53 ++
+ src/plugins/router.js                         |   5 +
+ src/services/database/__tests__/feed.test.js  |  86 +++
+ src/services/database/feed.js                 |  66 +++
+ src/services/database/index.js                |   3 +
+ src/shared/constants/dashboard.js             |   1 +
+ src/shared/constants/ui.js                    |   7 +
+ .../utils/__tests__/friendFootprints.test.js  | 235 ++++++++
+ src/shared/utils/friendFootprints.js          | 347 ++++++++++++
+ src/shared/utils/index.js                     |   1 +
+ src/stores/settings/appearance.js             |   3 +-
+ .../Charts/components/FriendFootprints.vue    | 522 ++++++++++++++++++
+ .../Dashboard/components/panelRegistry.js     |   1 +
+ 27 files changed, 1886 insertions(+), 5 deletions(-)
+ create mode 100644 src/shared/utils/__tests__/friendFootprints.test.js
+ create mode 100644 src/shared/utils/friendFootprints.js
+ create mode 100644 src/views/Charts/components/FriendFootprints.vue
+
+diff --git a/src/components/dialogs/UserDialog/UserDialogInfoTab.vue b/src/components/dialogs/UserDialog/UserDialogInfoTab.vue
+index 2ca5af63..746e90a7 100644
+--- a/src/components/dialogs/UserDialog/UserDialogInfoTab.vue
++++ b/src/components/dialogs/UserDialog/UserDialogInfoTab.vue
+@@ -288,6 +288,17 @@
+                             </div>
+                         </TooltipWrapper>
+ 
++                        <TooltipWrapper side="right" :content="t('view.charts.friend_footprints.tips.coverage')">
++                            <div
++                                class="flex justify-between items-start gap-2 text-xs cursor-pointer hover:text-foreground"
++                                @click="openFootprints()">
++                                <span class="text-muted-foreground shrink-0">{{
++                                    t('view.charts.friend_footprints.header')
++                                }}</span>
++                                <Footprints class="size-3.5 shrink-0 text-muted-foreground" />
++                            </div>
++                        </TooltipWrapper>
++
+                         <template v-if="currentUser.id !== userDialog.id">
+                             <TooltipWrapper
+                                 side="right"
+@@ -471,7 +482,7 @@
+ </template>
+ 
+ <script setup>
+-    import { History, Info, Languages, Pencil, Trash2, User } from 'lucide-vue-next';
++    import { Footprints, History, Info, Languages, Pencil, Trash2, User } from 'lucide-vue-next';
+     import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+     import IconFrame from '@/components/IconFrame.vue';
+     import { computed, ref, watch } from 'vue';
+@@ -480,6 +491,7 @@
+     import { storeToRefs } from 'pinia';
+     import { toast } from 'vue-sonner';
+     import { useI18n } from 'vue-i18n';
++    import { useRouter } from 'vue-router';
+ 
+     import {
+         formatDateFilter,
+@@ -512,6 +524,7 @@
+     import BioHistoryDialog from './BioHistoryDialog.vue';
+ 
+     const { t } = useI18n();
++    const router = useRouter();
+ 
+     const modalStore = useModalStore();
+     const instanceStore = useInstanceStore();
+@@ -571,6 +584,10 @@
+         isEditNoteAndMemoDialogVisible.value = true;
+     }
+ 
++    function openFootprints() {
++        router.push({ name: 'charts-friend-footprints', query: { user: userDialog.value.id } });
++    }
++
+     async function translateBio() {
+         if (translateLoading.value) {
+             return;
+diff --git a/src/components/nav-menu/__tests__/navMenuUtils.test.js b/src/components/nav-menu/__tests__/navMenuUtils.test.js
+index f2521dcd..a2e95fc5 100644
+--- a/src/components/nav-menu/__tests__/navMenuUtils.test.js
++++ b/src/components/nav-menu/__tests__/navMenuUtils.test.js
+@@ -10,6 +10,7 @@ const testDefinitions = [
+     { key: 'charts-instance', routeName: 'charts-instance' },
+     { key: 'charts-mutual', routeName: 'charts-mutual' },
+     { key: 'charts-hot-worlds', routeName: 'charts-hot-worlds' },
++    { key: 'charts-friend-footprints', routeName: 'charts-friend-footprints' },
+     { key: 'notification', routeName: 'notification' },
+     { key: 'direct-access', action: 'direct-access' }
+ ];
+@@ -248,7 +249,12 @@ describe('sanitizeLayout', () => {
+         const result = runSanitize(layout);
+         const chartsFolder = result.find((e) => e.type === 'folder' && e.id === 'default-folder-charts');
+         expect(chartsFolder).toBeDefined();
+-        expect(chartsFolder.items).toEqual(['charts-instance', 'charts-mutual', 'charts-hot-worlds']);
++        expect(chartsFolder.items).toEqual([
++            'charts-instance',
++            'charts-mutual',
++            'charts-hot-worlds',
++            'charts-friend-footprints'
++        ]);
+     });
+ 
+     test('auto-appends charts folder when charts keys are neither used nor hidden', () => {
+diff --git a/src/components/nav-menu/navLayoutDefaults.js b/src/components/nav-menu/navLayoutDefaults.js
+index 9c72eb2a..808f5eca 100644
+--- a/src/components/nav-menu/navLayoutDefaults.js
++++ b/src/components/nav-menu/navLayoutDefaults.js
+@@ -31,7 +31,7 @@ export function createBaseDefaultNavLayout(t) {
+             nameKey: 'nav_tooltip.charts',
+             name: t('nav_tooltip.charts'),
+             icon: 'ri-pie-chart-line',
+-            items: ['charts-instance', 'charts-mutual', 'charts-hot-worlds']
++            items: ['charts-instance', 'charts-mutual', 'charts-hot-worlds', 'charts-friend-footprints']
+         },
+         { type: 'item', key: 'tools' },
+         { type: 'item', key: 'direct-access' }
+diff --git a/src/components/nav-menu/navMenuUtils.js b/src/components/nav-menu/navMenuUtils.js
+index d837200c..bb8cfd97 100644
+--- a/src/components/nav-menu/navMenuUtils.js
++++ b/src/components/nav-menu/navMenuUtils.js
+@@ -39,7 +39,7 @@ export function sanitizeLayout(layout, hiddenKeys, definitionMap, allDefinitions
+     const normalizedHiddenKeys = normalizeHiddenKeys(hiddenKeys, definitionMap);
+     const hiddenSet = new Set(normalizedHiddenKeys);
+     const normalized = [];
+-    const chartsKeys = ['charts-instance', 'charts-mutual', 'charts-hot-worlds'];
++    const chartsKeys = ['charts-instance', 'charts-mutual', 'charts-hot-worlds', 'charts-friend-footprints'];
+ 
+     const appendItemEntry = (key, target = normalized) => {
+         if (!key || usedKeys.has(key) || !definitionMap.has(key)) {
+diff --git a/src/localization/en.json b/src/localization/en.json
+index 833bf243..331a10b4 100644
+--- a/src/localization/en.json
++++ b/src/localization/en.json
+@@ -659,6 +659,59 @@
+                 },
+                 "no_friend_data": "No friend visit data",
+                 "friend_visits": "{count} visits"
++            },
++            "friend_footprints": {
++                "tab_label": "Friend Footprints",
++                "header": "Friend Footprints",
++                "search_placeholder": "Search friends",
++                "no_candidates": "No friend has recorded locations yet",
++                "candidate_visits": "{count} trips",
++                "empty": "No location recorded for this friend in the selected period",
++                "tips": {
++                    "coverage": "VRCX can only show what it saw while it was running, so this is not the full history since you became friends",
++                    "first_record": "Earliest record: {date}"
++                },
++                "period": {
++                    "days_7": "7 days",
++                    "days_30": "30 days",
++                    "days_90": "90 days",
++                    "all": "All time"
++                },
++                "stats": {
++                    "worlds": "Worlds visited",
++                    "private_rooms": "{count} private rooms",
++                    "visits": "Location changes",
++                    "instance_hops": "{count} instance hops",
++                    "duration": "Time tracked",
++                    "duration_hint": "excludes offline gaps",
++                    "last_seen": "Last seen",
++                    "favourite": "Favourite world",
++                    "active_days": "Active days",
++                    "new_worlds": "{count} brand new worlds"
++                },
++                "unit": {
++                    "times": "{count}x",
++                    "days": "{count} days"
++                },
++                "section": {
++                    "top_worlds": "Most visited",
++                    "heatmap": "When they are around",
++                    "groups": "Groups they play in",
++                    "timeline": "Recent trips"
++                },
++                "heatmap": {
++                    "peak": "Busiest: {day} {hour}:00 ({count} trips)",
++                    "visits": "{count} trips"
++                },
++                "group_none": "Public and personal instances",
++                "kind": {
++                    "private": "Private room",
++                    "hidden": "Hidden room"
++                },
++                "row": {
++                    "ongoing": "still here",
++                    "unknown": "left offline"
++                }
+             }
+         },
+         "tools": {
+diff --git a/src/localization/es.json b/src/localization/es.json
+index 1255ab28..027bfcff 100644
+--- a/src/localization/es.json
++++ b/src/localization/es.json
+@@ -240,6 +240,59 @@
+                     "show_no_friend_instance": "Mostrar Instancia Sin Amigos",
+                     "show_detail": "Mostrar Detalle"
+                 }
++            },
++            "friend_footprints": {
++                "tab_label": "Friend Footprints",
++                "header": "Friend Footprints",
++                "search_placeholder": "Search friends",
++                "no_candidates": "No friend has recorded locations yet",
++                "candidate_visits": "{count} trips",
++                "empty": "No location recorded for this friend in the selected period",
++                "tips": {
++                    "coverage": "VRCX can only show what it saw while it was running, so this is not the full history since you became friends",
++                    "first_record": "Earliest record: {date}"
++                },
++                "period": {
++                    "days_7": "7 days",
++                    "days_30": "30 days",
++                    "days_90": "90 days",
++                    "all": "All time"
++                },
++                "stats": {
++                    "worlds": "Worlds visited",
++                    "private_rooms": "{count} private rooms",
++                    "visits": "Location changes",
++                    "instance_hops": "{count} instance hops",
++                    "duration": "Time tracked",
++                    "duration_hint": "excludes offline gaps",
++                    "last_seen": "Last seen",
++                    "favourite": "Favourite world",
++                    "active_days": "Active days",
++                    "new_worlds": "{count} brand new worlds"
++                },
++                "unit": {
++                    "times": "{count}x",
++                    "days": "{count} days"
++                },
++                "section": {
++                    "top_worlds": "Most visited",
++                    "heatmap": "When they are around",
++                    "groups": "Groups they play in",
++                    "timeline": "Recent trips"
++                },
++                "heatmap": {
++                    "peak": "Busiest: {day} {hour}:00 ({count} trips)",
++                    "visits": "{count} trips"
++                },
++                "group_none": "Public and personal instances",
++                "kind": {
++                    "private": "Private room",
++                    "hidden": "Hidden room"
++                },
++                "row": {
++                    "ongoing": "still here",
++                    "unknown": "left offline"
++                }
+             }
+         },
+         "tools": {
+diff --git a/src/localization/fr.json b/src/localization/fr.json
+index d481deb6..4a861bc3 100644
+--- a/src/localization/fr.json
++++ b/src/localization/fr.json
+@@ -385,6 +385,59 @@
+                     "exclude_friends_placeholder": "Select friends to exclude",
+                     "exclude_friends_help": "Selected friends will be hidden from the graph."
+                 }
++            },
++            "friend_footprints": {
++                "tab_label": "Friend Footprints",
++                "header": "Friend Footprints",
++                "search_placeholder": "Search friends",
++                "no_candidates": "No friend has recorded locations yet",
++                "candidate_visits": "{count} trips",
++                "empty": "No location recorded for this friend in the selected period",
++                "tips": {
++                    "coverage": "VRCX can only show what it saw while it was running, so this is not the full history since you became friends",
++                    "first_record": "Earliest record: {date}"
++                },
++                "period": {
++                    "days_7": "7 days",
++                    "days_30": "30 days",
++                    "days_90": "90 days",
++                    "all": "All time"
++                },
++                "stats": {
++                    "worlds": "Worlds visited",
++                    "private_rooms": "{count} private rooms",
++                    "visits": "Location changes",
++                    "instance_hops": "{count} instance hops",
++                    "duration": "Time tracked",
++                    "duration_hint": "excludes offline gaps",
++                    "last_seen": "Last seen",
++                    "favourite": "Favourite world",
++                    "active_days": "Active days",
++                    "new_worlds": "{count} brand new worlds"
++                },
++                "unit": {
++                    "times": "{count}x",
++                    "days": "{count} days"
++                },
++                "section": {
++                    "top_worlds": "Most visited",
++                    "heatmap": "When they are around",
++                    "groups": "Groups they play in",
++                    "timeline": "Recent trips"
++                },
++                "heatmap": {
++                    "peak": "Busiest: {day} {hour}:00 ({count} trips)",
++                    "visits": "{count} trips"
++                },
++                "group_none": "Public and personal instances",
++                "kind": {
++                    "private": "Private room",
++                    "hidden": "Hidden room"
++                },
++                "row": {
++                    "ongoing": "still here",
++                    "unknown": "left offline"
++                }
+             }
+         },
+         "tools": {
+diff --git a/src/localization/hu.json b/src/localization/hu.json
+index 2a4b5115..84f7818f 100644
+--- a/src/localization/hu.json
++++ b/src/localization/hu.json
+@@ -660,6 +660,59 @@
+                 },
+                 "no_friend_data": "Nincs baráti látogatási adat",
+                 "friend_visits": "{count} látogatás"
++            },
++            "friend_footprints": {
++                "tab_label": "Friend Footprints",
++                "header": "Friend Footprints",
++                "search_placeholder": "Search friends",
++                "no_candidates": "No friend has recorded locations yet",
++                "candidate_visits": "{count} trips",
++                "empty": "No location recorded for this friend in the selected period",
++                "tips": {
++                    "coverage": "VRCX can only show what it saw while it was running, so this is not the full history since you became friends",
++                    "first_record": "Earliest record: {date}"
++                },
++                "period": {
++                    "days_7": "7 days",
++                    "days_30": "30 days",
++                    "days_90": "90 days",
++                    "all": "All time"
++                },
++                "stats": {
++                    "worlds": "Worlds visited",
++                    "private_rooms": "{count} private rooms",
++                    "visits": "Location changes",
++                    "instance_hops": "{count} instance hops",
++                    "duration": "Time tracked",
++                    "duration_hint": "excludes offline gaps",
++                    "last_seen": "Last seen",
++                    "favourite": "Favourite world",
++                    "active_days": "Active days",
++                    "new_worlds": "{count} brand new worlds"
++                },
++                "unit": {
++                    "times": "{count}x",
++                    "days": "{count} days"
++                },
++                "section": {
++                    "top_worlds": "Most visited",
++                    "heatmap": "When they are around",
++                    "groups": "Groups they play in",
++                    "timeline": "Recent trips"
++                },
++                "heatmap": {
++                    "peak": "Busiest: {day} {hour}:00 ({count} trips)",
++                    "visits": "{count} trips"
++                },
++                "group_none": "Public and personal instances",
++                "kind": {
++                    "private": "Private room",
++                    "hidden": "Hidden room"
++                },
++                "row": {
++                    "ongoing": "still here",
++                    "unknown": "left offline"
++                }
+             }
+         },
+         "tools": {
+diff --git a/src/localization/ja.json b/src/localization/ja.json
+index f8330bd2..bea38431 100644
+--- a/src/localization/ja.json
++++ b/src/localization/ja.json
+@@ -648,6 +648,59 @@
+                 },
+                 "no_friend_data": "フレンドの訪問データがありません",
+                 "friend_visits": "{count} 回の訪問"
++            },
++            "friend_footprints": {
++                "tab_label": "フレンドの足跡",
++                "header": "フレンドの足跡",
++                "search_placeholder": "フレンドを検索",
++                "no_candidates": "位置が記録されているフレンドがいません",
++                "candidate_visits": "{count} 回",
++                "empty": "選択した期間にこのフレンドの位置は記録されていません",
++                "tips": {
++                    "coverage": "VRCX が起動中に確認できた位置のみ表示されるため、フレンドになってからの全履歴ではありません",
++                    "first_record": "最古の記録: {date}"
++                },
++                "period": {
++                    "days_7": "7日",
++                    "days_30": "30日",
++                    "days_90": "90日",
++                    "all": "全期間"
++                },
++                "stats": {
++                    "worlds": "訪れたワールド",
++                    "private_rooms": "プライベート {count} 回",
++                    "visits": "移動回数",
++                    "instance_hops": "同ワールド内移動 {count} 回",
++                    "duration": "滞在時間",
++                    "duration_hint": "オフライン区間を除く",
++                    "last_seen": "最終確認",
++                    "favourite": "最多のワールド",
++                    "active_days": "活動日数",
++                    "new_worlds": "初登場 {count} ワールド"
++                },
++                "unit": {
++                    "times": "{count} 回",
++                    "days": "{count} 日"
++                },
++                "section": {
++                    "top_worlds": "よく行くワールド",
++                    "heatmap": "活動時間帯",
++                    "groups": "参加グループ",
++                    "timeline": "最近の移動"
++                },
++                "heatmap": {
++                    "peak": "最も活発: {day} {hour}時（{count} 回）",
++                    "visits": "{count} 回"
++                },
++                "group_none": "公開・個人インスタンス",
++                "kind": {
++                    "private": "プライベートルーム",
++                    "hidden": "非公開ルーム"
++                },
++                "row": {
++                    "ongoing": "滞在中",
++                    "unknown": "オフラインで離脱"
++                }
+             }
+         },
+         "tools": {
+diff --git a/src/localization/pl.json b/src/localization/pl.json
+index 0fc8bd37..535b2427 100644
+--- a/src/localization/pl.json
++++ b/src/localization/pl.json
+@@ -333,6 +333,59 @@
+                     "mutual_friend_graph_ready_message": "Wykres sieci wspólnych znajomych jest gotowy",
+                     "friend_list_changed_fetch_again": "Nastąpiła zmiana listy znajomych. Pobierz ponownie sieć wspólnych znajomych"
+                 }
++            },
++            "friend_footprints": {
++                "tab_label": "Friend Footprints",
++                "header": "Friend Footprints",
++                "search_placeholder": "Search friends",
++                "no_candidates": "No friend has recorded locations yet",
++                "candidate_visits": "{count} trips",
++                "empty": "No location recorded for this friend in the selected period",
++                "tips": {
++                    "coverage": "VRCX can only show what it saw while it was running, so this is not the full history since you became friends",
++                    "first_record": "Earliest record: {date}"
++                },
++                "period": {
++                    "days_7": "7 days",
++                    "days_30": "30 days",
++                    "days_90": "90 days",
++                    "all": "All time"
++                },
++                "stats": {
++                    "worlds": "Worlds visited",
++                    "private_rooms": "{count} private rooms",
++                    "visits": "Location changes",
++                    "instance_hops": "{count} instance hops",
++                    "duration": "Time tracked",
++                    "duration_hint": "excludes offline gaps",
++                    "last_seen": "Last seen",
++                    "favourite": "Favourite world",
++                    "active_days": "Active days",
++                    "new_worlds": "{count} brand new worlds"
++                },
++                "unit": {
++                    "times": "{count}x",
++                    "days": "{count} days"
++                },
++                "section": {
++                    "top_worlds": "Most visited",
++                    "heatmap": "When they are around",
++                    "groups": "Groups they play in",
++                    "timeline": "Recent trips"
++                },
++                "heatmap": {
++                    "peak": "Busiest: {day} {hour}:00 ({count} trips)",
++                    "visits": "{count} trips"
++                },
++                "group_none": "Public and personal instances",
++                "kind": {
++                    "private": "Private room",
++                    "hidden": "Hidden room"
++                },
++                "row": {
++                    "ongoing": "still here",
++                    "unknown": "left offline"
++                }
+             }
+         },
+         "tools": {
+diff --git a/src/localization/pt.json b/src/localization/pt.json
+index 383b4dce..54141ca4 100644
+--- a/src/localization/pt.json
++++ b/src/localization/pt.json
+@@ -590,6 +590,59 @@
+                 },
+                 "no_friend_data": "Sem dados de visita de amigos",
+                 "friend_visits": "{count} visitas"
++            },
++            "friend_footprints": {
++                "tab_label": "Friend Footprints",
++                "header": "Friend Footprints",
++                "search_placeholder": "Search friends",
++                "no_candidates": "No friend has recorded locations yet",
++                "candidate_visits": "{count} trips",
++                "empty": "No location recorded for this friend in the selected period",
++                "tips": {
++                    "coverage": "VRCX can only show what it saw while it was running, so this is not the full history since you became friends",
++                    "first_record": "Earliest record: {date}"
++                },
++                "period": {
++                    "days_7": "7 days",
++                    "days_30": "30 days",
++                    "days_90": "90 days",
++                    "all": "All time"
++                },
++                "stats": {
++                    "worlds": "Worlds visited",
++                    "private_rooms": "{count} private rooms",
++                    "visits": "Location changes",
++                    "instance_hops": "{count} instance hops",
++                    "duration": "Time tracked",
++                    "duration_hint": "excludes offline gaps",
++                    "last_seen": "Last seen",
++                    "favourite": "Favourite world",
++                    "active_days": "Active days",
++                    "new_worlds": "{count} brand new worlds"
++                },
++                "unit": {
++                    "times": "{count}x",
++                    "days": "{count} days"
++                },
++                "section": {
++                    "top_worlds": "Most visited",
++                    "heatmap": "When they are around",
++                    "groups": "Groups they play in",
++                    "timeline": "Recent trips"
++                },
++                "heatmap": {
++                    "peak": "Busiest: {day} {hour}:00 ({count} trips)",
++                    "visits": "{count} trips"
++                },
++                "group_none": "Public and personal instances",
++                "kind": {
++                    "private": "Private room",
++                    "hidden": "Hidden room"
++                },
++                "row": {
++                    "ongoing": "still here",
++                    "unknown": "left offline"
++                }
+             }
+         },
+         "tools": {
+diff --git a/src/localization/ru.json b/src/localization/ru.json
+index dcbace3e..58622d2e 100644
+--- a/src/localization/ru.json
++++ b/src/localization/ru.json
+@@ -246,6 +246,59 @@
+                     "show_no_friend_instance": "Показать Инстанс «Без друзей»",
+                     "show_detail": "Показать Детали"
+                 }
++            },
++            "friend_footprints": {
++                "tab_label": "Friend Footprints",
++                "header": "Friend Footprints",
++                "search_placeholder": "Search friends",
++                "no_candidates": "No friend has recorded locations yet",
++                "candidate_visits": "{count} trips",
++                "empty": "No location recorded for this friend in the selected period",
++                "tips": {
++                    "coverage": "VRCX can only show what it saw while it was running, so this is not the full history since you became friends",
++                    "first_record": "Earliest record: {date}"
++                },
++                "period": {
++                    "days_7": "7 days",
++                    "days_30": "30 days",
++                    "days_90": "90 days",
++                    "all": "All time"
++                },
++                "stats": {
++                    "worlds": "Worlds visited",
++                    "private_rooms": "{count} private rooms",
++                    "visits": "Location changes",
++                    "instance_hops": "{count} instance hops",
++                    "duration": "Time tracked",
++                    "duration_hint": "excludes offline gaps",
++                    "last_seen": "Last seen",
++                    "favourite": "Favourite world",
++                    "active_days": "Active days",
++                    "new_worlds": "{count} brand new worlds"
++                },
++                "unit": {
++                    "times": "{count}x",
++                    "days": "{count} days"
++                },
++                "section": {
++                    "top_worlds": "Most visited",
++                    "heatmap": "When they are around",
++                    "groups": "Groups they play in",
++                    "timeline": "Recent trips"
++                },
++                "heatmap": {
++                    "peak": "Busiest: {day} {hour}:00 ({count} trips)",
++                    "visits": "{count} trips"
++                },
++                "group_none": "Public and personal instances",
++                "kind": {
++                    "private": "Private room",
++                    "hidden": "Hidden room"
++                },
++                "row": {
++                    "ongoing": "still here",
++                    "unknown": "left offline"
++                }
+             }
+         },
+         "tools": {
+diff --git a/src/localization/th.json b/src/localization/th.json
+index 772c87b1..a00eff4e 100644
+--- a/src/localization/th.json
++++ b/src/localization/th.json
+@@ -483,6 +483,59 @@
+                 },
+                 "no_friend_data": "ไม่มีข้อมูลการเข้าชมของเพื่อน",
+                 "friend_visits": "การเยี่ยมชม {count}"
++            },
++            "friend_footprints": {
++                "tab_label": "Friend Footprints",
++                "header": "Friend Footprints",
++                "search_placeholder": "Search friends",
++                "no_candidates": "No friend has recorded locations yet",
++                "candidate_visits": "{count} trips",
++                "empty": "No location recorded for this friend in the selected period",
++                "tips": {
++                    "coverage": "VRCX can only show what it saw while it was running, so this is not the full history since you became friends",
++                    "first_record": "Earliest record: {date}"
++                },
++                "period": {
++                    "days_7": "7 days",
++                    "days_30": "30 days",
++                    "days_90": "90 days",
++                    "all": "All time"
++                },
++                "stats": {
++                    "worlds": "Worlds visited",
++                    "private_rooms": "{count} private rooms",
++                    "visits": "Location changes",
++                    "instance_hops": "{count} instance hops",
++                    "duration": "Time tracked",
++                    "duration_hint": "excludes offline gaps",
++                    "last_seen": "Last seen",
++                    "favourite": "Favourite world",
++                    "active_days": "Active days",
++                    "new_worlds": "{count} brand new worlds"
++                },
++                "unit": {
++                    "times": "{count}x",
++                    "days": "{count} days"
++                },
++                "section": {
++                    "top_worlds": "Most visited",
++                    "heatmap": "When they are around",
++                    "groups": "Groups they play in",
++                    "timeline": "Recent trips"
++                },
++                "heatmap": {
++                    "peak": "Busiest: {day} {hour}:00 ({count} trips)",
++                    "visits": "{count} trips"
++                },
++                "group_none": "Public and personal instances",
++                "kind": {
++                    "private": "Private room",
++                    "hidden": "Hidden room"
++                },
++                "row": {
++                    "ongoing": "still here",
++                    "unknown": "left offline"
++                }
+             }
+         },
+         "tools": {
+diff --git a/src/localization/zh-CN.json b/src/localization/zh-CN.json
+index 5e05f0e4..7bbbd97f 100644
+--- a/src/localization/zh-CN.json
++++ b/src/localization/zh-CN.json
+@@ -656,6 +656,59 @@
+                 },
+                 "no_friend_data": "没有好友访问数据",
+                 "friend_visits": "{count} 次访问"
++            },
++            "friend_footprints": {
++                "tab_label": "好友足迹",
++                "header": "好友足迹",
++                "search_placeholder": "搜索好友",
++                "no_candidates": "还没有好友的位置记录",
++                "candidate_visits": "{count} 次",
++                "empty": "所选时间范围内没有记录到这位好友的位置",
++                "tips": {
++                    "coverage": "VRCX 只能显示它运行期间看到的位置，所以这不是你们成为好友以来的完整历史",
++                    "first_record": "最早记录：{date}"
++                },
++                "period": {
++                    "days_7": "7 天",
++                    "days_30": "30 天",
++                    "days_90": "90 天",
++                    "all": "全部"
++                },
++                "stats": {
++                    "worlds": "去过的地图",
++                    "private_rooms": "私人房间 {count} 次",
++                    "visits": "换图次数",
++                    "instance_hops": "同图换房 {count} 次",
++                    "duration": "记录到的停留时长",
++                    "duration_hint": "不含离线间隔",
++                    "last_seen": "最近出现",
++                    "favourite": "最常去",
++                    "active_days": "活跃天数",
++                    "new_worlds": "首次出现的新图 {count} 张"
++                },
++                "unit": {
++                    "times": "{count} 次",
++                    "days": "{count} 天"
++                },
++                "section": {
++                    "top_worlds": "最常去的地图",
++                    "heatmap": "什么时段在玩",
++                    "groups": "常混的社群",
++                    "timeline": "最近行程"
++                },
++                "heatmap": {
++                    "peak": "最活跃：{day} {hour} 点（{count} 次）",
++                    "visits": "{count} 次"
++                },
++                "group_none": "公开与个人房间",
++                "kind": {
++                    "private": "私人房间",
++                    "hidden": "隐藏房间"
++                },
++                "row": {
++                    "ongoing": "还在这里",
++                    "unknown": "离线时离开"
++                }
+             }
+         },
+         "tools": {
+diff --git a/src/localization/zh-TW.json b/src/localization/zh-TW.json
+index 64878df9..ede41a40 100644
+--- a/src/localization/zh-TW.json
++++ b/src/localization/zh-TW.json
+@@ -644,6 +644,59 @@
+                 },
+                 "no_friend_data": "沒有好友造訪資料",
+                 "friend_visits": "{count} 次造訪"
++            },
++            "friend_footprints": {
++                "tab_label": "好友足跡",
++                "header": "好友足跡",
++                "search_placeholder": "搜尋好友",
++                "no_candidates": "還沒有好友的位置記錄",
++                "candidate_visits": "{count} 次",
++                "empty": "所选時間範圍內沒有記錄到這位好友的位置",
++                "tips": {
++                    "coverage": "VRCX 只能顯示它執行期間看到的位置，所以這不是你們成為好友以來的完整歷史",
++                    "first_record": "最早記錄：{date}"
++                },
++                "period": {
++                    "days_7": "7 天",
++                    "days_30": "30 天",
++                    "days_90": "90 天",
++                    "all": "全部"
++                },
++                "stats": {
++                    "worlds": "去過的地圖",
++                    "private_rooms": "私人房間 {count} 次",
++                    "visits": "換圖次數",
++                    "instance_hops": "同圖換房 {count} 次",
++                    "duration": "記錄到的停留時長",
++                    "duration_hint": "不含離線間隔",
++                    "last_seen": "最近出現",
++                    "favourite": "最常去",
++                    "active_days": "活躍天數",
++                    "new_worlds": "首次出現的新圖 {count} 張"
++                },
++                "unit": {
++                    "times": "{count} 次",
++                    "days": "{count} 天"
++                },
++                "section": {
++                    "top_worlds": "最常去的地圖",
++                    "heatmap": "什麼時段在玩",
++                    "groups": "常混的社群",
++                    "timeline": "最近行程"
++                },
++                "heatmap": {
++                    "peak": "最活躍：{day} {hour} 點（{count} 次）",
++                    "visits": "{count} 次"
++                },
++                "group_none": "公開與個人房間",
++                "kind": {
++                    "private": "私人房間",
++                    "hidden": "隱藏房間"
++                },
++                "row": {
++                    "ongoing": "還在這裡",
++                    "unknown": "離線時離開"
++                }
+             }
+         },
+         "tools": {
+diff --git a/src/plugins/router.js b/src/plugins/router.js
+index 98c8c4d0..f6e464c9 100644
+--- a/src/plugins/router.js
++++ b/src/plugins/router.js
+@@ -112,6 +112,11 @@ const routes = [
+                 name: 'charts-hot-worlds',
+                 component: () => import('./../views/Charts/components/HotWorlds.vue')
+             },
++            {
++                path: 'charts/friend-footprints',
++                name: 'charts-friend-footprints',
++                component: () => import('./../views/Charts/components/FriendFootprints.vue')
++            },
+             { path: 'tools', name: 'tools', component: Tools },
+             {
+                 path: 'tools/gallery',
+diff --git a/src/services/database/__tests__/feed.test.js b/src/services/database/__tests__/feed.test.js
+index 1f9bc48b..2935416d 100644
+--- a/src/services/database/__tests__/feed.test.js
++++ b/src/services/database/__tests__/feed.test.js
+@@ -73,6 +73,92 @@ describe('feed.getBioHistoryForUserId', () => {
+     });
+ });
+ 
++describe('feed.getGpsRowsForUserId', () => {
++    beforeEach(() => {
++        mocks.execute.mockReset();
++    });
++
++    test('maps rows and keeps the ascending order', async () => {
++        mocks.execute.mockImplementation(async (callback) => {
++            callback(['2026-09-20T00:00:00.000Z', 'wrld_1:inst', 'offline', 'Alpha', '中文游戏社区', 60000]);
++            return undefined;
++        });
++
++        const result = await feed.getGpsRowsForUserId('usr_1');
++
++        expect(result).toEqual([
++            {
++                created_at: '2026-09-20T00:00:00.000Z',
++                location: 'wrld_1:inst',
++                previous_location: 'offline',
++                world_name: 'Alpha',
++                group_name: '中文游戏社区',
++                time: 60000
++            }
++        ]);
++        const sql = mocks.execute.mock.calls[0][1];
++        expect(sql).toContain('usr123_feed_gps');
++        expect(sql).toContain('ORDER BY created_at ASC, id ASC');
++        expect(mocks.execute.mock.calls[0][2]).toMatchObject({ '@user_id': 'usr_1' });
++        expect(sql).not.toContain('AND created_at >=');
++    });
++
++    test('adds the date filter only when a start date is given', async () => {
++        mocks.execute.mockImplementation(async () => undefined);
++
++        await feed.getGpsRowsForUserId('usr_1', '2026-09-01T00:00:00.000Z');
++
++        expect(mocks.execute.mock.calls[0][1]).toContain('AND created_at >= @created_after');
++        expect(mocks.execute.mock.calls[0][2]).toMatchObject({ '@created_after': '2026-09-01T00:00:00.000Z' });
++    });
++
++    test('coerces a null group name to an empty string', async () => {
++        mocks.execute.mockImplementation(async (callback) => {
++            callback(['2026-09-20T00:00:00.000Z', 'private:private', '', null, null, null]);
++            return undefined;
++        });
++
++        const result = await feed.getGpsRowsForUserId('usr_1');
++
++        expect(result[0]).toMatchObject({ world_name: '', group_name: '', time: 0 });
++    });
++});
++
++describe('feed.getPlayersWithGpsHistory', () => {
++    beforeEach(() => {
++        mocks.execute.mockReset();
++    });
++
++    test('returns one entry per player', async () => {
++        mocks.execute.mockImplementation(async (callback) => {
++            callback(['usr_1', 'Tester', 42, 12, '2026-09-20T00:00:00.000Z']);
++            return undefined;
++        });
++
++        const result = await feed.getPlayersWithGpsHistory();
++
++        expect(result).toEqual([
++            {
++                userId: 'usr_1',
++                displayName: 'Tester',
++                visits: 42,
++                worlds: 12,
++                lastAt: '2026-09-20T00:00:00.000Z'
++            }
++        ]);
++        expect(mocks.execute.mock.calls[0][1]).toContain('GROUP BY user_id');
++    });
++
++    test('filters by start date when given', async () => {
++        mocks.execute.mockImplementation(async () => undefined);
++
++        await feed.getPlayersWithGpsHistory('2026-09-01T00:00:00.000Z');
++
++        expect(mocks.execute.mock.calls[0][1]).toContain('WHERE created_at >= @created_after');
++        expect(mocks.execute.mock.calls[0][2]).toMatchObject({ '@created_after': '2026-09-01T00:00:00.000Z' });
++    });
++});
++
+ describe('feed.addBioToDatabase', () => {
+     beforeEach(() => {
+         mocks.executeNonQuery.mockReset();
+diff --git a/src/services/database/feed.js b/src/services/database/feed.js
+index 446c114d..739c22f1 100644
+--- a/src/services/database/feed.js
++++ b/src/services/database/feed.js
+@@ -79,6 +79,72 @@ const feed = {
+         return bioHistory;
+     },
+ 
++    /**
++     * Loads every recorded location change for one player, oldest first.
++     *
++     * The footprint dashboard does its own aggregation in shared/utils/friendFootprints.js,
++     * so this stays a plain ordered read.
++     *
++     * @param {string} userId - VRChat user id.
++     * @param {string} [createdAfter] - ISO timestamp to start from, empty for everything.
++     * @param {number} maxEntries - Maximum number of rows to return.
++     * @returns {Promise<object[]>} Raw feed_gps rows.
++     */
++    async getGpsRowsForUserId(userId, createdAfter = '', maxEntries = 20000) {
++        const rows = [];
++        let dateFilter = '';
++        const args = { '@user_id': userId, '@limit': maxEntries };
++        if (createdAfter) {
++            dateFilter = 'AND created_at >= @created_after ';
++            args['@created_after'] = createdAfter;
++        }
++        await sqliteService.execute(
++            (dbRow) => {
++                rows.push({
++                    created_at: dbRow[0],
++                    location: dbRow[1] ?? '',
++                    previous_location: dbRow[2] ?? '',
++                    world_name: dbRow[3] ?? '',
++                    group_name: dbRow[4] ?? '',
++                    time: Number(dbRow[5]) || 0
++                });
++            },
++            `SELECT created_at, location, previous_location, world_name, group_name, time FROM ${dbVars.userPrefix}_feed_gps WHERE user_id = @user_id ${dateFilter}ORDER BY created_at ASC, id ASC LIMIT @limit`,
++            args
++        );
++        return rows;
++    },
++
++    /**
++     * Lists players that have recorded location history, most recently seen first.
++     *
++     * @param {string} [createdAfter] - ISO timestamp to start from, empty for everything.
++     * @returns {Promise<object[]>} One entry per player with a visit count.
++     */
++    async getPlayersWithGpsHistory(createdAfter = '') {
++        const players = [];
++        let dateFilter = '';
++        const args = {};
++        if (createdAfter) {
++            dateFilter = 'WHERE created_at >= @created_after ';
++            args['@created_after'] = createdAfter;
++        }
++        await sqliteService.execute(
++            (dbRow) => {
++                players.push({
++                    userId: dbRow[0],
++                    displayName: dbRow[1] ?? '',
++                    visits: Number(dbRow[2]) || 0,
++                    worlds: Number(dbRow[3]) || 0,
++                    lastAt: dbRow[4] ?? ''
++                });
++            },
++            `SELECT user_id, MAX(display_name), COUNT(*), COUNT(DISTINCT world_name), MAX(created_at) FROM ${dbVars.userPrefix}_feed_gps ${dateFilter}GROUP BY user_id ORDER BY MAX(created_at) DESC`,
++            args
++        );
++        return players;
++    },
++
+     addAvatarToDatabase(entry) {
+         sqliteService.executeNonQuery(
+             `INSERT OR IGNORE INTO ${dbVars.userPrefix}_feed_avatar (created_at, user_id, display_name, owner_id, avatar_name, current_avatar_image_url, current_avatar_thumbnail_image_url, previous_current_avatar_image_url, previous_current_avatar_thumbnail_image_url) VALUES (@created_at, @user_id, @display_name, @owner_id, @avatar_name, @current_avatar_image_url, @current_avatar_thumbnail_image_url, @previous_current_avatar_image_url, @previous_current_avatar_thumbnail_image_url)`,
+diff --git a/src/services/database/index.js b/src/services/database/index.js
+index 0417f65b..481ebd0a 100644
+--- a/src/services/database/index.js
++++ b/src/services/database/index.js
+@@ -62,6 +62,9 @@ const database = {
+         await sqliteService.executeNonQuery(
+             `CREATE TABLE IF NOT EXISTS ${dbVars.userPrefix}_feed_gps (id INTEGER PRIMARY KEY, created_at TEXT, user_id TEXT, display_name TEXT, location TEXT, world_name TEXT, previous_location TEXT, time INTEGER, group_name TEXT)`
+         );
++        await sqliteService.executeNonQuery(
++            `CREATE INDEX IF NOT EXISTS ${dbVars.userPrefix}_feed_gps_user_created_idx ON ${dbVars.userPrefix}_feed_gps (user_id, created_at)`
++        );
+         await sqliteService.executeNonQuery(
+             `CREATE TABLE IF NOT EXISTS ${dbVars.userPrefix}_feed_status (id INTEGER PRIMARY KEY, created_at TEXT, user_id TEXT, display_name TEXT, status TEXT, status_description TEXT, previous_status TEXT, previous_status_description TEXT)`
+         );
+diff --git a/src/shared/constants/dashboard.js b/src/shared/constants/dashboard.js
+index 0db7c1a5..193019a4 100644
+--- a/src/shared/constants/dashboard.js
++++ b/src/shared/constants/dashboard.js
+@@ -8,5 +8,6 @@ export const DASHBOARD_BLOCKED_PANEL_KEYS = new Set([
+     'charts-instance',
+     'charts-mutual',
+     'charts-hot-worlds',
++    'charts-friend-footprints',
+     'tools'
+ ]);
+diff --git a/src/shared/constants/ui.js b/src/shared/constants/ui.js
+index 48ff63fa..9b834e7c 100644
+--- a/src/shared/constants/ui.js
++++ b/src/shared/constants/ui.js
+@@ -113,6 +113,13 @@ const navDefinitions = [
+         labelKey: 'view.charts.hot_worlds.tab_label',
+         routeName: 'charts-hot-worlds'
+     },
++    {
++        key: 'charts-friend-footprints',
++        icon: 'ri-footprint-line',
++        tooltip: 'view.charts.friend_footprints.tab_label',
++        labelKey: 'view.charts.friend_footprints.tab_label',
++        routeName: 'charts-friend-footprints'
++    },
+     {
+         key: 'tools',
+         icon: 'ri-tools-line',
+diff --git a/src/shared/utils/__tests__/friendFootprints.test.js b/src/shared/utils/__tests__/friendFootprints.test.js
+new file mode 100644
+index 00000000..d4cdc175
+--- /dev/null
++++ b/src/shared/utils/__tests__/friendFootprints.test.js
+@@ -0,0 +1,235 @@
++import { describe, expect, test } from 'vitest';
++
++import {
++    buildFootprintVisits,
++    footprintByDay,
++    footprintGroupStats,
++    footprintHeatmap,
++    footprintTimeline,
++    summarizeFootprint,
++    topFootprintWorlds
++} from '../friendFootprints';
++
++const MINUTE = 60 * 1000;
++const HOUR = 60 * MINUTE;
++
++/**
++ * Local-time timestamp so the tests do not depend on the machine timezone.
++ *
++ * @param {number} offsetMs
++ * @returns {string}
++ */
++function at(offsetMs) {
++    return new Date(Date.UTC(2026, 7, 20, 10, 0, 0) + offsetMs).toISOString();
++}
++
++function row(location, offsetMs, extra = {}) {
++    return {
++        created_at: at(offsetMs),
++        location,
++        previous_location: '',
++        world_name: extra.worldName || '',
++        group_name: extra.groupName || '',
++        time: extra.time || 0
++    };
++}
++
++const WORLD_A = 'wrld_aaaaaaaa-0000-0000-0000-000000000000:12345~region=jp';
++const WORLD_A_OTHER = 'wrld_aaaaaaaa-0000-0000-0000-000000000000:67890~region=jp';
++const WORLD_B = 'wrld_bbbbbbbb-0000-0000-0000-000000000000:11111~region=use';
++
++describe('buildFootprintVisits', () => {
++    test('folds consecutive rows of the same world into one visit', () => {
++        const visits = buildFootprintVisits([
++            row(WORLD_A, 0, { worldName: 'Alpha' }),
++            row(WORLD_A_OTHER, 10 * MINUTE, { worldName: 'Alpha' }),
++            row(WORLD_B, 30 * MINUTE, { worldName: 'Beta' })
++        ]);
++
++        expect(visits).toHaveLength(2);
++        expect(visits[0]).toMatchObject({
++            worldId: 'wrld_aaaaaaaa-0000-0000-0000-000000000000',
++            name: 'Alpha',
++            instanceHops: 2,
++            durationMs: 30 * MINUTE,
++            durationKnown: true
++        });
++        expect(visits[0].leftAt).toBe(Date.parse(at(30 * MINUTE)));
++    });
++
++    test('marks the final visit as ongoing with no duration', () => {
++        const visits = buildFootprintVisits([row(WORLD_A, 0, { worldName: 'Alpha' })]);
++
++        expect(visits[0].leftAt).toBeNull();
++        expect(visits[0].durationMs).toBe(0);
++        expect(visits[0].durationKnown).toBe(false);
++    });
++
++    test('drops dwell time across an offline gap', () => {
++        const visits = buildFootprintVisits([
++            row(WORLD_A, 0, { worldName: 'Alpha' }),
++            row(WORLD_B, 3 * 24 * HOUR, { worldName: 'Beta' })
++        ]);
++
++        expect(visits[0].durationMs).toBe(0);
++        expect(visits[0].durationKnown).toBe(false);
++    });
++
++    test('skips offline and traveling rows', () => {
++        const visits = buildFootprintVisits([
++            row('offline', 0),
++            row('traveling', MINUTE),
++            row(WORLD_A, 2 * MINUTE, { worldName: 'Alpha' })
++        ]);
++
++        expect(visits).toHaveLength(1);
++        expect(visits[0].kind).toBe('world');
++    });
++
++    test('classifies private rooms separately from worlds', () => {
++        const visits = buildFootprintVisits([
++            row('private:private', 0),
++            row(WORLD_A, 5 * MINUTE, { worldName: 'Alpha' })
++        ]);
++
++        expect(visits[0]).toMatchObject({ kind: 'private', worldId: '' });
++        expect(visits[1].kind).toBe('world');
++    });
++
++    test('tolerates junk input', () => {
++        expect(buildFootprintVisits([])).toEqual([]);
++        expect(buildFootprintVisits(null)).toEqual([]);
++        expect(buildFootprintVisits([{ created_at: 'not-a-date', location: WORLD_A }])).toEqual([]);
++    });
++});
++
++describe('summarizeFootprint', () => {
++    test('counts visits, distinct worlds and active days', () => {
++        const visits = buildFootprintVisits([
++            row(WORLD_A, 0, { worldName: 'Alpha' }),
++            row(WORLD_B, HOUR, { worldName: 'Beta' }),
++            row(WORLD_A, 2 * HOUR, { worldName: 'Alpha' })
++        ]);
++        const summary = summarizeFootprint(visits, Date.parse(at(3 * HOUR)));
++
++        expect(summary.visits).toBe(3);
++        expect(summary.worlds).toBe(2);
++        expect(summary.firstAt).toBe(Date.parse(at(0)));
++        expect(summary.lastAt).toBe(Date.parse(at(2 * HOUR)));
++        expect(summary.daysSinceLastSeen).toBe(0);
++        expect(summary.activeDays).toBeGreaterThanOrEqual(1);
++    });
++
++    test('handles an empty history', () => {
++        const summary = summarizeFootprint([]);
++
++        expect(summary.visits).toBe(0);
++        expect(summary.worlds).toBe(0);
++        expect(summary.daysSinceLastSeen).toBeNull();
++    });
++});
++
++describe('topFootprintWorlds', () => {
++    test('ranks by visit count and reports the share', () => {
++        const visits = buildFootprintVisits([
++            row(WORLD_A, 0, { worldName: 'Alpha' }),
++            row(WORLD_B, HOUR, { worldName: 'Beta' }),
++            row(WORLD_A, 2 * HOUR, { worldName: 'Alpha' }),
++            row(WORLD_B, 3 * HOUR, { worldName: 'Beta' }),
++            row(WORLD_A, 4 * HOUR, { worldName: 'Alpha' })
++        ]);
++        const top = topFootprintWorlds(visits);
++
++        expect(top[0]).toMatchObject({ rank: 1, name: 'Alpha', visits: 3 });
++        expect(top[1]).toMatchObject({ rank: 2, name: 'Beta', visits: 2 });
++        expect(top[0].share).toBeCloseTo(0.6, 5);
++    });
++
++    test('leaves private rooms out of the world ranking by default', () => {
++        const visits = buildFootprintVisits([
++            row('private:private', 0),
++            row('private:private', 10 * MINUTE),
++            row(WORLD_A, 20 * MINUTE, { worldName: 'Alpha' }),
++            row(WORLD_B, 30 * MINUTE, { worldName: 'Beta' }),
++            row(WORLD_A, 40 * MINUTE, { worldName: 'Alpha' })
++        ]);
++
++        const worldsOnly = topFootprintWorlds(visits);
++        expect(worldsOnly.map((world) => world.name)).toEqual(['Alpha', 'Beta']);
++
++        // the two adjacent private rows fold into one visit, so Alpha leads the ranking
++        const withPrivate = topFootprintWorlds(visits, 10, { includeNonWorld: true });
++        expect(withPrivate).toHaveLength(3);
++        expect(withPrivate[0]).toMatchObject({ name: 'Alpha', visits: 2 });
++        expect(withPrivate.some((world) => world.kind === 'private' && world.visits === 1)).toBe(true);
++    });
++
++    test('respects the limit', () => {
++        const visits = buildFootprintVisits([
++            row(WORLD_A, 0, { worldName: 'Alpha' }),
++            row(WORLD_B, HOUR, { worldName: 'Beta' })
++        ]);
++
++        expect(topFootprintWorlds(visits, 1)).toHaveLength(1);
++    });
++});
++
++describe('footprintHeatmap', () => {
++    test('buckets visits by local weekday and hour', () => {
++        // built from local date parts so the expectation holds in any timezone
++        const localNoon = new Date(2026, 8, 15, 12, 30).toISOString();
++        const visits = buildFootprintVisits([
++            { created_at: localNoon, location: WORLD_A, world_name: 'Alpha', group_name: '', time: 0 }
++        ]);
++        const { counts, peak } = footprintHeatmap(visits);
++
++        expect(counts[2][12]).toBe(1);
++        expect(peak).toMatchObject({ day: 2, hour: 12, visits: 1 });
++    });
++
++    test('returns an all-zero grid for no visits', () => {
++        const { counts, peak, max } = footprintHeatmap([]);
++
++        expect(counts).toHaveLength(7);
++        expect(counts[0]).toHaveLength(24);
++        expect(peak).toBeNull();
++        expect(max).toBe(1);
++    });
++});
++
++describe('footprintGroupStats', () => {
++    test('separates group instances from plain ones', () => {
++        const visits = buildFootprintVisits([
++            row(WORLD_A, 0, { worldName: 'Alpha', groupName: '中文游戏社区' }),
++            row(WORLD_B, HOUR, { worldName: 'Beta', groupName: '中文游戏社区' }),
++            row(WORLD_A, 2 * HOUR, { worldName: 'Alpha' })
++        ]);
++        const stats = footprintGroupStats(visits);
++
++        expect(stats[0]).toMatchObject({ groupName: '中文游戏社区', visits: 2, worlds: 2 });
++        expect(stats[1]).toMatchObject({ groupName: '', visits: 1 });
++    });
++});
++
++describe('footprintTimeline and footprintByDay', () => {
++    test('timeline is newest first', () => {
++        const visits = buildFootprintVisits([
++            row(WORLD_A, 0, { worldName: 'Alpha' }),
++            row(WORLD_B, HOUR, { worldName: 'Beta' })
++        ]);
++
++        expect(footprintTimeline(visits, 1)[0].name).toBe('Beta');
++    });
++
++    test('groups visits under day buckets, newest day first', () => {
++        const visits = buildFootprintVisits([
++            row(WORLD_A, 0, { worldName: 'Alpha' }),
++            row(WORLD_B, 26 * HOUR, { worldName: 'Beta' })
++        ]);
++        const days = footprintByDay(visits);
++
++        expect(days.length).toBeGreaterThanOrEqual(2);
++        expect(days[0].timestamp).toBeGreaterThan(days[1].timestamp);
++        expect(days[0].visits[0].name).toBe('Beta');
++    });
++});
+diff --git a/src/shared/utils/friendFootprints.js b/src/shared/utils/friendFootprints.js
+new file mode 100644
+index 00000000..c801addc
+--- /dev/null
++++ b/src/shared/utils/friendFootprints.js
+@@ -0,0 +1,347 @@
++import { parseLocation } from './locationParser';
++
++/**
++ * Turns raw feed_gps rows into visit records and aggregates them for the friend
++ * footprint dashboard.
++ *
++ * A feed_gps row means: "at created_at the player moved to `location`, having come
++ * from `previous_location`". The stored `time` column is how long the tracker had
++ * been watching the previous location, which is only a lower bound - it resets when
++ * the player hops instances inside the same world. The gap between two consecutive
++ * rows is the more usable measure of dwell time, so that is what we compute here and
++ * the reported value is kept only as a sanity fallback.
++ */
++
++const HOUR_MS = 60 * 60 * 1000;
++
++// A gap longer than this means VRCX was closed or the player logged off, so the
++// dwell time around it is unknown rather than long.
++const MAX_RELIABLE_GAP_MS = 12 * HOUR_MS;
++
++/**
++ * @param {string} iso
++ * @returns {number} Epoch ms, or 0 when unparseable
++ */
++function toEpoch(iso) {
++    const value = Date.parse(iso);
++    return Number.isNaN(value) ? 0 : value;
++}
++
++/**
++ * Classify a location string into something a chart can group by.
++ *
++ * @param {string} location
++ * @returns {{ key: string; kind: string; worldId: string }}
++ */
++function classifyLocation(location) {
++    const parsed = parseLocation(location);
++    if (parsed.isOffline) {
++        return { key: 'offline', kind: 'offline', worldId: '' };
++    }
++    if (parsed.isTraveling) {
++        return { key: 'traveling', kind: 'traveling', worldId: '' };
++    }
++    if (parsed.worldId) {
++        return { key: parsed.worldId, kind: 'world', worldId: parsed.worldId };
++    }
++    if (parsed.isPrivate) {
++        return { key: 'private', kind: 'private', worldId: '' };
++    }
++    const prefix = String(location || '').split(':')[0];
++    return { key: prefix || 'unknown', kind: prefix || 'unknown', worldId: '' };
++}
++
++/**
++ * @param {string} location
++ * @returns {boolean} True when the player was somewhere worth recording
++ */
++function isTrackable(location) {
++    const { kind } = classifyLocation(location);
++    return kind !== 'offline' && kind !== 'traveling';
++}
++
++/**
++ * Build merged visit records from raw rows, oldest row first.
++ *
++ * Consecutive rows for the same world are folded into one visit, so reloading into a
++ * different instance of a world you were already in does not read as a new trip.
++ *
++ * @param {object[]} rows - Feed_gps rows ordered ascending by created_at
++ * @returns {object[]} Visits, oldest first
++ */
++function buildFootprintVisits(rows) {
++    const entries = [];
++    for (const row of rows || []) {
++        const at = toEpoch(row.created_at);
++        if (!at || !isTrackable(row.location)) {
++            continue;
++        }
++        const { key, kind, worldId } = classifyLocation(row.location);
++        entries.push({
++            at,
++            key,
++            kind,
++            worldId,
++            location: row.location,
++            name: String(row.world_name || ''),
++            groupName: String(row.group_name || ''),
++            reportedMs: Number(row.time) || 0
++        });
++    }
++
++    const visits = [];
++    let index = 0;
++    while (index < entries.length) {
++        const current = entries[index];
++        let next = index + 1;
++        while (next < entries.length && entries[next].key === current.key) {
++            next++;
++        }
++        const following = entries[next];
++        const gapMs = following ? following.at - current.at : 0;
++        const reliable = Boolean(following) && gapMs > 0 && gapMs <= MAX_RELIABLE_GAP_MS;
++
++        visits.push({
++            key: current.key,
++            kind: current.kind,
++            worldId: current.worldId,
++            name: current.name,
++            groupName: current.groupName,
++            arrivedAt: current.at,
++            // no following row means we never saw them leave: still there as far as we know
++            leftAt: following ? following.at : null,
++            durationMs: reliable ? gapMs : 0,
++            durationKnown: reliable,
++            instanceHops: next - index,
++            lastSeenAt: following ? following.at : current.at
++        });
++        index = next;
++    }
++    return visits;
++}
++
++/**
++ * Headline numbers for the dashboard.
++ *
++ * @param {object[]} visits
++ * @param {number} [now] - Epoch ms to measure recency against
++ * @returns {object}
++ */
++function summarizeFootprint(visits, now = Date.now()) {
++    const list = visits || [];
++    const byWorld = new Map();
++    let durationMs = 0;
++    let knownDurationMs = 0;
++    let privateVisits = 0;
++    let instanceHops = 0;
++
++    for (const visit of list) {
++        if (!byWorld.has(visit.key)) {
++            byWorld.set(visit.key, { firstAt: visit.arrivedAt, lastAt: visit.lastSeenAt });
++        } else {
++            const bucket = byWorld.get(visit.key);
++            bucket.lastAt = visit.lastSeenAt;
++        }
++        durationMs += visit.durationMs;
++        if (visit.durationKnown) {
++            knownDurationMs += visit.durationMs;
++        }
++        if (visit.kind !== 'world') {
++            privateVisits++;
++        }
++        instanceHops += Math.max(0, visit.instanceHops - 1);
++    }
++
++    const firstAt = list.length ? list[0].arrivedAt : 0;
++    const lastAt = list.length ? list[list.length - 1].arrivedAt : 0;
++    const days = {};
++    for (const visit of list) {
++        days[new Date(visit.arrivedAt).toLocaleDateString('sv')] = true;
++    }
++
++    return {
++        visits: list.length,
++        worlds: byWorld.size,
++        privateVisits,
++        instanceHops,
++        durationMs,
++        knownDurationMs,
++        activeDays: Object.keys(days).length,
++        firstAt,
++        lastAt,
++        daysSinceLastSeen: lastAt ? Math.max(0, Math.floor((now - lastAt) / (24 * HOUR_MS))) : null,
++        // distinct worlds whose very first record is inside this visit list
++        newWorlds: [...byWorld.values()].filter((bucket) => bucket.firstAt === bucket.lastAt).length
++    };
++}
++
++/**
++ * Aggregate visits per world, most visited first.
++ *
++ * Private and other non-world rooms are left out by default: they carry no world name,
++ * so they drown out the "which map does this friend hang out in" answer. They are still
++ * counted in the summary.
++ *
++ * @param {object[]} visits
++ * @param {number} [limit]
++ * @param {{ includeNonWorld?: boolean }} [options]
++ * @returns {object[]}
++ */
++function topFootprintWorlds(visits, limit = 10, options = {}) {
++    const includeNonWorld = options.includeNonWorld === true;
++    const byWorld = new Map();
++    for (const visit of visits || []) {
++        if (!includeNonWorld && visit.kind !== 'world') {
++            continue;
++        }
++        let bucket = byWorld.get(visit.key);
++        if (!bucket) {
++            bucket = {
++                key: visit.key,
++                kind: visit.kind,
++                worldId: visit.worldId,
++                name: visit.name,
++                groupName: visit.groupName,
++                visits: 0,
++                durationMs: 0,
++                durationKnown: false,
++                firstAt: visit.arrivedAt,
++                lastAt: visit.lastSeenAt,
++                instanceHops: 0
++            };
++            byWorld.set(visit.key, bucket);
++        }
++        bucket.visits++;
++        bucket.durationMs += visit.durationMs;
++        bucket.durationKnown = bucket.durationKnown || visit.durationKnown;
++        bucket.firstAt = Math.min(bucket.firstAt, visit.arrivedAt);
++        bucket.lastAt = Math.max(bucket.lastAt, visit.lastSeenAt);
++        bucket.instanceHops += Math.max(0, visit.instanceHops - 1);
++        if (!bucket.name && visit.name) {
++            bucket.name = visit.name;
++        }
++        if (!bucket.groupName && visit.groupName) {
++            bucket.groupName = visit.groupName;
++        }
++    }
++
++    const worlds = [...byWorld.values()].sort(
++        (a, b) => b.visits - a.visits || b.durationMs - a.durationMs || b.lastAt - a.lastAt
++    );
++    const total = worlds.reduce((sum, world) => sum + world.visits, 0) || 1;
++    worlds.forEach((world, i) => {
++        world.rank = i + 1;
++        world.share = world.visits / total;
++    });
++    return Number.isFinite(limit) ? worlds.slice(0, limit) : worlds;
++}
++
++/**
++ * Weekday x hour grid of when this player is around, in the local timezone.
++ *
++ * @param {object[]} visits
++ * @returns {{
++ *     grid: number[][];
++ *     counts: number[][];
++ *     peak: { day: number; hour: number; visits: number } | null;
++ *     max: number;
++ * }}
++ */
++function footprintHeatmap(visits) {
++    const grid = Array.from({ length: 7 }, () => Array(24).fill(0));
++    const counts = Array.from({ length: 7 }, () => Array(24).fill(0));
++    let max = 0;
++
++    for (const visit of visits || []) {
++        const date = new Date(visit.arrivedAt);
++        const day = date.getDay();
++        const hour = date.getHours();
++        counts[day][hour]++;
++        grid[day][hour] += visit.durationMs;
++        if (counts[day][hour] > max) {
++            max = counts[day][hour];
++        }
++    }
++
++    let peak = null;
++    for (let day = 0; day < 7; day++) {
++        for (let hour = 0; hour < 24; hour++) {
++            if (!peak || counts[day][hour] > peak.visits) {
++                peak = { day, hour, visits: counts[day][hour] };
++            }
++        }
++    }
++    return { grid, counts, peak: peak && peak.visits ? peak : null, max: max || 1 };
++}
++
++/**
++ * Group visits by the VRChat group the instance belonged to.
++ *
++ * @param {object[]} visits
++ * @returns {object[]}
++ */
++function footprintGroupStats(visits) {
++    const byGroup = new Map();
++    for (const visit of visits || []) {
++        const name = visit.groupName || '';
++        let bucket = byGroup.get(name);
++        if (!bucket) {
++            bucket = { groupName: name, visits: 0, durationMs: 0, worlds: new Set() };
++            byGroup.set(name, bucket);
++        }
++        bucket.visits++;
++        bucket.durationMs += visit.durationMs;
++        bucket.worlds.add(visit.key);
++    }
++    return [...byGroup.values()]
++        .map((bucket) => ({
++            groupName: bucket.groupName,
++            visits: bucket.visits,
++            durationMs: bucket.durationMs,
++            worlds: bucket.worlds.size
++        }))
++        .sort((a, b) => b.visits - a.visits);
++}
++
++/**
++ * Most recent visits first, for the timeline.
++ *
++ * @param {object[]} visits
++ * @param {number} [limit]
++ * @returns {object[]}
++ */
++function footprintTimeline(visits, limit = 60) {
++    return [...(visits || [])].reverse().slice(0, limit);
++}
++
++/**
++ * Bucket visits by calendar day so the timeline can be grouped under date headers.
++ *
++ * @param {object[]} visits - Any order
++ * @param {string} [locale] - Passed to toLocaleDateString for the label
++ * @returns {{ dateKey: string; visits: object[] }[]}
++ */
++function footprintByDay(visits, locale = undefined) {
++    const buckets = new Map();
++    for (const visit of visits || []) {
++        const date = new Date(visit.arrivedAt);
++        const dateKey = date.toLocaleDateString(locale || 'sv');
++        if (!buckets.has(dateKey)) {
++            buckets.set(dateKey, { dateKey, timestamp: date.getTime(), visits: [] });
++        }
++        buckets.get(dateKey).visits.push(visit);
++    }
++    return [...buckets.values()].sort((a, b) => b.timestamp - a.timestamp);
++}
++
++export {
++    MAX_RELIABLE_GAP_MS,
++    buildFootprintVisits,
++    classifyLocation,
++    footprintByDay,
++    footprintGroupStats,
++    footprintHeatmap,
++    footprintTimeline,
++    summarizeFootprint,
++    topFootprintWorlds
++};
+diff --git a/src/shared/utils/index.js b/src/shared/utils/index.js
+index c41ee2b9..ad761299 100644
+--- a/src/shared/utils/index.js
++++ b/src/shared/utils/index.js
+@@ -11,6 +11,7 @@ export * from './compare';
+ export * from './csv';
+ export * from './fileUtils';
+ export * from './friend';
++export * from './friendFootprints';
+ export * from './group';
+ export * from './instance';
+ export * from './platformUtils';
+diff --git a/src/stores/settings/appearance.js b/src/stores/settings/appearance.js
+index 58a94c60..342e371d 100644
+--- a/src/stores/settings/appearance.js
++++ b/src/stores/settings/appearance.js
+@@ -111,7 +111,8 @@ export const useAppearanceSettingsStore = defineStore(
+                 'friend-list',
+                 'charts-instance',
+                 'charts-mutual',
+-                'charts-hot-worlds'
++                'charts-hot-worlds',
++                'charts-friend-footprints'
+             ].includes(currentRouteName);
+         });
+ 
+diff --git a/src/views/Charts/components/FriendFootprints.vue b/src/views/Charts/components/FriendFootprints.vue
+new file mode 100644
+index 00000000..be4fd2a3
+--- /dev/null
++++ b/src/views/Charts/components/FriendFootprints.vue
+@@ -0,0 +1,522 @@
++<template>
++    <div id="chart" class="x-container">
++        <div class="flex h-[calc(100vh-96px)] min-h-0 gap-3 pt-3">
++            <!-- 左栏：从好友里挑一个 -->
++            <aside class="flex w-72 flex-none flex-col gap-2 border-r border-muted-foreground/20 pr-3 min-h-0">
++                <div class="flex items-center gap-2">
++                    <Footprints class="size-4 shrink-0 text-muted-foreground" />
++                    <span class="truncate text-sm font-medium">{{ t('view.charts.friend_footprints.header') }}</span>
++                </div>
++
++                <Input v-model="search" :placeholder="t('view.charts.friend_footprints.search_placeholder')" />
++
++                <ScrollArea class="min-h-0 flex-1 pr-1">
++                    <div v-if="!filteredCandidates.length" class="px-2 py-6 text-xs text-muted-foreground">
++                        {{ t('view.charts.friend_footprints.no_candidates') }}
++                    </div>
++                    <button
++                        v-for="candidate in filteredCandidates"
++                        :key="candidate.userId"
++                        type="button"
++                        class="x-hover-list flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left"
++                        :class="candidate.userId === selectedId ? 'bg-accent' : ''"
++                        @click="selectFriend(candidate.userId)">
++                        <div class="relative inline-block size-9 flex-none" :class="userStatusClass(candidate.user)">
++                            <Avatar class="size-9">
++                                <AvatarImage :src="userImage(candidate.user, true)" class="object-cover" />
++                                <AvatarFallback><User class="size-4 text-muted-foreground" /></AvatarFallback>
++                            </Avatar>
++                        </div>
++                        <div class="min-w-0 flex-1">
++                            <div
++                                class="truncate text-[13px] font-medium"
++                                :style="{ color: candidate.user?.$userColour }">
++                                {{ candidate.displayName }}
++                            </div>
++                            <div class="truncate text-[11px] text-muted-foreground">
++                                {{ t('view.charts.friend_footprints.candidate_visits', { count: candidate.visits }) }}
++                                · {{ candidate.lastAt ? timeAgo(candidate.lastAt) : '—' }}
++                            </div>
++                        </div>
++                    </button>
++                </ScrollArea>
++            </aside>
++
++            <!-- 右栏：详情 -->
++            <main class="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto pb-6">
++                <div v-if="!selectedId" class="mt-[120px] flex justify-center">
++                    <DataTableEmpty type="nodata" />
++                </div>
++
++                <template v-else>
++                    <div class="flex flex-wrap items-center justify-between gap-2">
++                        <div class="flex min-w-0 items-center gap-2">
++                            <span
++                                class="cursor-pointer truncate text-base font-medium hover:underline"
++                                @click="showUserDialog(selectedId)">
++                                {{ selectedName }}
++                            </span>
++                            <HoverCard>
++                                <HoverCardTrigger as-child>
++                                    <Info class="size-3.5 shrink-0 cursor-pointer opacity-70" />
++                                </HoverCardTrigger>
++                                <HoverCardContent side="bottom" align="start" class="w-80 text-xs">
++                                    {{ t('view.charts.friend_footprints.tips.coverage') }}
++                                    <template v-if="summary.firstAt">
++                                        <br />
++                                        {{
++                                            t('view.charts.friend_footprints.tips.first_record', {
++                                                date: formatDateFilter(summary.firstAt, 'long')
++                                            })
++                                        }}
++                                    </template>
++                                </HoverCardContent>
++                            </HoverCard>
++                        </div>
++
++                        <ToggleGroup
++                            variant="outline"
++                            type="single"
++                            :model-value="String(rangeDays)"
++                            @update:modelValue="handleRangeChange">
++                            <ToggleGroupItem v-for="option in rangeOptions" :key="option" :value="String(option)">
++                                {{
++                                    option
++                                        ? t(`view.charts.friend_footprints.period.days_${option}`)
++                                        : t('view.charts.friend_footprints.period.all')
++                                }}
++                            </ToggleGroupItem>
++                        </ToggleGroup>
++                    </div>
++
++                    <div v-if="loading" class="mt-[100px] flex justify-center">
++                        <RefreshCcw class="size-6 animate-spin text-muted-foreground" />
++                    </div>
++
++                    <div
++                        v-else-if="!visits.length"
++                        class="rounded-xl border border-dashed border-muted-foreground/30 p-6">
++                        <span class="text-xs text-muted-foreground">
++                            {{ t('view.charts.friend_footprints.empty') }}
++                        </span>
++                    </div>
++
++                    <template v-else>
++                        <!-- 概览 -->
++                        <div class="grid grid-cols-2 gap-2 md:grid-cols-4">
++                            <div v-for="card in statCards" :key="card.label" class="rounded-xl border p-3">
++                                <div class="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
++                                    {{ card.label }}
++                                </div>
++                                <div class="mt-1 truncate text-lg font-medium" :title="card.title || ''">
++                                    {{ card.value }}
++                                </div>
++                                <div v-if="card.hint" class="truncate text-[11px] text-muted-foreground">
++                                    {{ card.hint }}
++                                </div>
++                            </div>
++                        </div>
++
++                        <!-- 常去的地图 -->
++                        <section class="rounded-xl border p-3">
++                            <div class="mb-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
++                                {{ t('view.charts.friend_footprints.section.top_worlds') }}
++                            </div>
++                            <button
++                                v-for="world in topWorlds"
++                                :key="world.key"
++                                type="button"
++                                class="group flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left hover:bg-accent"
++                                @click="world.worldId && showWorldDialog(world.worldId)">
++                                <span
++                                    class="w-6 shrink-0 text-right font-mono text-xs font-bold text-muted-foreground"
++                                    :class="world.rank === 1 ? 'text-primary' : ''">
++                                    #{{ world.rank }}
++                                </span>
++                                <div class="min-w-0 flex-1">
++                                    <div class="flex items-center gap-1.5">
++                                        <span class="truncate text-sm group-hover:underline">{{
++                                            worldLabel(world)
++                                        }}</span>
++                                        <span v-if="world.groupName" class="shrink-0 text-[10px] text-muted-foreground">
++                                            {{ world.groupName }}
++                                        </span>
++                                    </div>
++                                    <div
++                                        class="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
++                                        <div
++                                            class="h-full rounded-full bg-black/25 transition-all duration-500 dark:bg-white/40"
++                                            :style="{ width: `${Math.max(3, world.share * 100)}%` }"></div>
++                                    </div>
++                                </div>
++                                <div class="shrink-0 text-right text-xs text-muted-foreground">
++                                    <div>
++                                        {{ t('view.charts.friend_footprints.unit.times', { count: world.visits }) }}
++                                    </div>
++                                    <div class="text-[10px] opacity-70">
++                                        {{ world.durationMs ? timeToText(world.durationMs, false) : '—' }}
++                                    </div>
++                                </div>
++                            </button>
++                        </section>
++
++                        <!-- 时段热力 -->
++                        <section class="rounded-xl border p-3">
++                            <div class="mb-2 flex items-center justify-between gap-2">
++                                <span class="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
++                                    {{ t('view.charts.friend_footprints.section.heatmap') }}
++                                </span>
++                                <span v-if="heatmap.peak" class="text-[11px] text-muted-foreground">
++                                    {{
++                                        t('view.charts.friend_footprints.heatmap.peak', {
++                                            day: weekdayLabels[heatmap.peak.day],
++                                            hour: heatmap.peak.hour,
++                                            count: heatmap.peak.visits
++                                        })
++                                    }}
++                                </span>
++                            </div>
++                            <div class="overflow-x-auto">
++                                <div class="min-w-[560px]">
++                                    <div class="mb-1 flex gap-1 pl-9">
++                                        <span
++                                            v-for="h in 24"
++                                            :key="h"
++                                            class="flex-1 text-center text-[9px] text-muted-foreground/70">
++                                            {{ h % 3 === 1 ? h - 1 : '' }}
++                                        </span>
++                                    </div>
++                                    <div
++                                        v-for="(row, day) in heatmap.counts"
++                                        :key="day"
++                                        class="mb-1 flex items-center gap-1">
++                                        <span class="w-8 shrink-0 text-[10px] text-muted-foreground">
++                                            {{ weekdayLabels[day].slice(0, 3) }}
++                                        </span>
++                                        <TooltipWrapper
++                                            v-for="(count, hour) in row"
++                                            :key="hour"
++                                            :content="`${weekdayLabels[day]} ${hour}:00 - ${t('view.charts.friend_footprints.heatmap.visits', { count })}`">
++                                            <div
++                                                class="h-4 flex-1 rounded-[3px]"
++                                                :class="count ? '' : 'bg-black/[0.05] dark:bg-white/[0.05]'"
++                                                :style="count ? heatStyle(count) : ''"></div>
++                                        </TooltipWrapper>
++                                    </div>
++                                </div>
++                            </div>
++                        </section>
++
++                        <!-- 常混的社群 -->
++                        <section v-if="groupStats.length > 1 || groupStats[0]?.groupName" class="rounded-xl border p-3">
++                            <div class="mb-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
++                                {{ t('view.charts.friend_footprints.section.groups') }}
++                            </div>
++                            <div class="flex flex-wrap gap-1.5">
++                                <span
++                                    v-for="group in groupStats.slice(0, 12)"
++                                    :key="group.groupName || 'none'"
++                                    class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]">
++                                    <template v-if="group.groupName">
++                                        {{ group.groupName }}
++                                        <span class="text-muted-foreground">×{{ group.visits }}</span>
++                                    </template>
++                                    <template v-else>{{ t('view.charts.friend_footprints.group_none') }}</template>
++                                </span>
++                            </div>
++                        </section>
++
++                        <!-- 时间线 -->
++                        <section class="rounded-xl border p-3">
++                            <div class="mb-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
++                                {{ t('view.charts.friend_footprints.section.timeline') }}
++                            </div>
++                            <div v-for="day in timelineDays" :key="day.dateKey" class="mb-3 last:mb-0">
++                                <div class="mb-1 text-[11px] font-medium text-muted-foreground">
++                                    {{ day.dateKey }}
++                                </div>
++                                <div
++                                    v-for="visit in day.visits"
++                                    :key="`${visit.key}-${visit.arrivedAt}`"
++                                    class="flex items-center gap-2 border-l border-muted-foreground/20 py-1 pl-3">
++                                    <span class="w-12 shrink-0 font-mono text-[11px] text-muted-foreground">
++                                        {{ formatHour(visit.arrivedAt) }}
++                                    </span>
++                                    <span class="min-w-0 flex-1 truncate text-xs">
++                                        {{ worldLabel(visit) }}
++                                    </span>
++                                    <span class="shrink-0 text-[11px] text-muted-foreground/80">
++                                        {{
++                                            visit.leftAt === null
++                                                ? t('view.charts.friend_footprints.row.ongoing')
++                                                : visit.durationKnown
++                                                  ? timeToText(visit.durationMs, false)
++                                                  : t('view.charts.friend_footprints.row.unknown')
++                                        }}
++                                    </span>
++                                </div>
++                            </div>
++                        </section>
++                    </template>
++                </template>
++            </main>
++        </div>
++    </div>
++</template>
++
++<script setup>
++    import { computed, onMounted, ref, watch } from 'vue';
++    import { Footprints, Info, RefreshCcw, User } from 'lucide-vue-next';
++    import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
++    import { DataTableEmpty } from '@/components/ui/data-table';
++    import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
++    import { Input } from '@/components/ui/input';
++    import { ScrollArea } from '@/components/ui/scroll-area';
++    import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
++    import { storeToRefs } from 'pinia';
++    import { useI18n } from 'vue-i18n';
++    import { useRoute } from 'vue-router';
++
++    import { useUserDisplay } from '@/composables/useUserDisplay';
++    import { showUserDialog } from '@/coordinators/userCoordinator';
++    import { showWorldDialog } from '@/coordinators/worldCoordinator';
++    import { database } from '@/services/database';
++    import { useFriendStore } from '@/stores';
++    import {
++        buildFootprintVisits,
++        footprintByDay,
++        footprintGroupStats,
++        footprintHeatmap,
++        footprintTimeline,
++        formatDateFilter,
++        summarizeFootprint,
++        timeAgo,
++        timeToText,
++        topFootprintWorlds
++    } from '@/shared/utils';
++
++    const { t } = useI18n();
++    const route = useRoute();
++    const { friends } = storeToRefs(useFriendStore());
++    const { userImage, userStatusClass } = useUserDisplay();
++
++    const DAY_MS = 24 * 60 * 60 * 1000;
++    const rangeOptions = [7, 30, 90, 0];
++
++    const candidates = ref([]);
++    const search = ref('');
++    const selectedId = ref('');
++    const rangeDays = ref(30);
++    const loading = ref(false);
++    const visits = ref([]);
++
++    const filteredCandidates = computed(() => {
++        const needle = search.value.trim().toLowerCase();
++        if (!needle) {
++            return candidates.value;
++        }
++        return candidates.value.filter(
++            (candidate) =>
++                candidate.displayName.toLowerCase().includes(needle) || candidate.userId.toLowerCase().includes(needle)
++        );
++    });
++
++    const selectedName = computed(() => {
++        const candidate = candidates.value.find((entry) => entry.userId === selectedId.value);
++        if (candidate) {
++            return candidate.displayName;
++        }
++        const friend = friends.value.get(selectedId.value);
++        return friend?.ref?.displayName || friend?.name || selectedId.value;
++    });
++
++    const summary = computed(() => summarizeFootprint(visits.value));
++
++    const topWorlds = computed(() => topFootprintWorlds(visits.value, 10));
++
++    const heatmap = computed(() => footprintHeatmap(visits.value));
++
++    const groupStats = computed(() => footprintGroupStats(visits.value));
++
++    const timelineDays = computed(() => footprintByDay(footprintTimeline(visits.value, 80)));
++
++    const weekdayLabels = computed(() => {
++        const labels = [];
++        // 2026-01-04 is a Monday; index by getDay() (0 = Sunday)
++        for (let day = 0; day < 7; day++) {
++            labels.push(new Date(2026, 0, 4 + day).toLocaleDateString(undefined, { weekday: 'short' }));
++        }
++        // shift so index 0 lines up with Sunday
++        return [labels[6], ...labels.slice(0, 6)];
++    });
++
++    const statCards = computed(() => {
++        const stats = summary.value;
++        const cards = [
++            {
++                label: t('view.charts.friend_footprints.stats.worlds'),
++                value: String(stats.worlds),
++                hint: stats.privateVisits
++                    ? t('view.charts.friend_footprints.stats.private_rooms', { count: stats.privateVisits })
++                    : ''
++            },
++            {
++                label: t('view.charts.friend_footprints.stats.visits'),
++                value: String(stats.visits),
++                hint: stats.instanceHops
++                    ? t('view.charts.friend_footprints.stats.instance_hops', { count: stats.instanceHops })
++                    : ''
++            },
++            {
++                label: t('view.charts.friend_footprints.stats.duration'),
++                value: stats.durationMs ? timeToText(stats.durationMs, false) : '—',
++                hint: t('view.charts.friend_footprints.stats.duration_hint')
++            },
++            {
++                label: t('view.charts.friend_footprints.stats.last_seen'),
++                value: stats.lastAt ? timeAgo(stats.lastAt) : '—',
++                hint: stats.lastAt ? formatDateFilter(stats.lastAt, 'long') : '',
++                title: stats.lastAt ? formatDateFilter(stats.lastAt, 'long') : ''
++            }
++        ];
++        if (topWorlds.value.length) {
++            cards.push({
++                label: t('view.charts.friend_footprints.stats.favourite'),
++                value: worldLabel(topWorlds.value[0]),
++                hint: t('view.charts.friend_footprints.unit.times', { count: topWorlds.value[0].visits }),
++                title: worldLabel(topWorlds.value[0])
++            });
++        }
++        cards.push({
++            label: t('view.charts.friend_footprints.stats.active_days'),
++            value: t('view.charts.friend_footprints.unit.days', { count: stats.activeDays }),
++            hint: stats.newWorlds ? t('view.charts.friend_footprints.stats.new_worlds', { count: stats.newWorlds }) : ''
++        });
++        return cards;
++    });
++
++    /**
++     * @param {object} world
++     * @returns {string}
++     */
++    function worldLabel(world) {
++        if (world.name) {
++            return world.name;
++        }
++        if (world.kind === 'private') {
++            return t('view.charts.friend_footprints.kind.private');
++        }
++        return t('view.charts.friend_footprints.kind.hidden');
++    }
++
++    /**
++     * @param {number} count
++     * @returns {string}
++     */
++    function heatStyle(count) {
++        const ratio = Math.min(1, count / heatmap.value.max);
++        return `background-color: color-mix(in oklab, var(--primary) ${Math.round(18 + ratio * 82)}%, transparent)`;
++    }
++
++    /**
++     * @param {number} timestamp
++     * @returns {string}
++     */
++    function formatHour(timestamp) {
++        return new Date(timestamp).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
++    }
++
++    function handleRangeChange(value) {
++        if (!value) {
++            return;
++        }
++        rangeDays.value = parseInt(value, 10);
++        loadVisits();
++    }
++
++    function selectFriend(userId) {
++        if (selectedId.value === userId) {
++            return;
++        }
++        selectedId.value = userId;
++        loadVisits();
++    }
++
++    async function loadCandidates() {
++        try {
++            const since = rangeDays.value ? new Date(Date.now() - rangeDays.value * DAY_MS).toISOString() : '';
++            const rows = await database.getPlayersWithGpsHistory(since);
++            candidates.value = rows.map((row) => {
++                const friend = friends.value.get(row.userId);
++                return {
++                    ...row,
++                    user: friend?.ref || { id: row.userId, displayName: row.displayName },
++                    displayName: friend?.ref?.displayName || friend?.name || row.displayName || row.userId
++                };
++            });
++        } catch (error) {
++            console.error('Failed to load footprint candidates', error);
++            candidates.value = [];
++        }
++    }
++
++    async function loadVisits() {
++        const userId = selectedId.value;
++        if (!userId) {
++            visits.value = [];
++            return;
++        }
++        loading.value = true;
++        try {
++            const since = rangeDays.value ? new Date(Date.now() - rangeDays.value * DAY_MS).toISOString() : '';
++            const rows = await database.getGpsRowsForUserId(userId, since);
++            // the dialog may have moved on to another friend while we waited
++            if (selectedId.value !== userId) {
++                return;
++            }
++            visits.value = buildFootprintVisits(rows);
++        } catch (error) {
++            console.error('Failed to load footprint', error);
++            if (selectedId.value === userId) {
++                visits.value = [];
++            }
++        } finally {
++            if (selectedId.value === userId) {
++                loading.value = false;
++            }
++        }
++    }
++
++    watch(
++        () => friends.value.size,
++        () => {
++            if (!candidates.value.length) {
++                loadCandidates();
++            }
++        }
++    );
++
++    onMounted(async () => {
++        await loadCandidates();
++        const wanted = String(route.query.user || '');
++        if (wanted && wanted !== selectedId.value) {
++            selectFriend(wanted);
++            return;
++        }
++        if (!selectedId.value && candidates.value.length) {
++            selectedId.value = candidates.value[0].userId;
++            loadVisits();
++        }
++    });
++
++    // arriving here from another player's profile while the page is already mounted
++    watch(
++        () => route.query.user,
++        (value) => {
++            const wanted = String(value || '');
++            if (wanted && wanted !== selectedId.value) {
++                selectFriend(wanted);
++            }
++        }
++    );
++</script>
+diff --git a/src/views/Dashboard/components/panelRegistry.js b/src/views/Dashboard/components/panelRegistry.js
+index 2cf31c59..95ec8bf2 100644
+--- a/src/views/Dashboard/components/panelRegistry.js
++++ b/src/views/Dashboard/components/panelRegistry.js
+@@ -32,6 +32,7 @@ export const panelComponentMap = {
+     'charts-instance': defineAsyncComponent(() => import('../../Charts/components/InstanceActivity.vue')),
+     'charts-mutual': defineAsyncComponent(() => import('../../Charts/components/MutualFriends.vue')),
+     'charts-hot-worlds': defineAsyncComponent(() => import('../../Charts/components/HotWorlds.vue')),
++    'charts-friend-footprints': defineAsyncComponent(() => import('../../Charts/components/FriendFootprints.vue')),
+     tools: Tools,
+     'widget:feed': defineAsyncComponent(() => import('../widgets/FeedWidget.vue')),
+     'widget:game-log': defineAsyncComponent(() => import('../widgets/GameLogWidget.vue')),
+-- 
+2.55.0.windows.3
+

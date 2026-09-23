@@ -10,16 +10,25 @@
 | 位置 | 作用 |
 | --- | --- |
 | `C:\Users\28041\vrcx-fork` | 你的 fork，完整 git 历史（4000+ 提交），所有自定义代码都在这 |
-| ↳ 分支 `feature/bio-history` | 简介历史功能，基于官方 v2026.09.16 |
+| ↳ 分支 `my-vrcx` | 你的全部功能（简介历史、好友足迹），基于官方 v2026.09.16 |
+| ↳ 分支 `master` | 官方原版，一条线没动，rebase 的对照基线 |
 | ↳ 远程 `upstream` | 官方仓库，走 ghfast.top 镜像（这台机直连 github.com 不通） |
 | ↳ 远程 `upstream_github` | 官方仓库原始地址，有梯子时用它拉取更可信 |
 | `E:\VRCX` | 正式安装的 VRCX，前端在 `E:\VRCX\html` |
 | `E:\VRCX\html_backup\` | 每次部署前自动留的前端备份（保留最近 3 份） |
 | `E:\VRCX\html_backup_20260923` | 第一次改造前的**官方原版**前端，回滚用 |
 | `C:\Users\28041\vrcx-mod` | 维护脚本（故意放在仓库外，rebase 时不会被牵连） |
-| `C:\Users\28041\vrcx-mod\patches` | 你这两个 commit 的 .patch 备份，万一 git 玩坏了能用 |
+| `C:\Users\28041\vrcx-mod\patches` | 功能 commit 的 .patch 备份，万一 git 玩坏了能用 |
 
 数据库和登录状态在 `C:\Users\28041\AppData\Roaming\VRCX`，脚本从不碰它。
+
+## 这个改版加了什么
+
+**玩家简介历史** —— 资料页简介卡片下面直接显示上一条简介，标题栏历史图标点开是完整历史，支持逐词红绿对比和全文对比。数据本来就在 `feed_bio` 表里，官方只当动态流用，没在资料页暴露。
+
+**好友足迹仪表盘** —— 图表菜单里新增一页，左侧选好友，右侧看：去过的地图数、换图次数、记录到的停留时长、最近出现时间、最常去的图、什么时段在玩（周×小时热力图）、常混的社群、按日期分组的最近行程。数据来自 `feed_gps` 表。
+
+两处都受同一个前提限制：**只记录 VRCX 运行期间看到的东西**，且位置记录只覆盖好友。软件关着时发生的变更补不回来，所以这不等于"从加好友那天起的完整历史"。
 
 ## 怎么跑
 
@@ -40,7 +49,7 @@ C:\Users\28041\vrcx-mod\vrcx-rollback.cmd   回滚前端
 | 分支 | 内容 |
 | --- | --- |
 | `master` | 官方原版代码，未改动，用来对照和 rebase |
-| `feature/bio-history` | 官方 + 简介历史功能 |
+| `my-vrcx` | 官方 + 你的全部功能（简介历史、好友足迹） |
 | `vrcx-mod` | 这个文件夹的全部内容（脚本 + 指南 + patch） |
 
 推送走 SSH 22 端口，**不需要开梯子**。换电脑怎么恢复见《维护指南》第六部分。
@@ -76,7 +85,7 @@ cd C:\Users\28041\vrcx-mod
 .\update.ps1
 ```
 
-`update.ps1` 做四件事：拉上游 → 把 `feature/bio-history` rebase 到新版 master → 跑 lint 和构建 → 部署。
+`update.ps1` 做四件事：拉上游 → 把 `my-vrcx` rebase 到新版 master → 跑 lint 和构建 → 部署。
 
 **如果 rebase 停在冲突上**（上游也改了你改过的文件），仓库会处于冲突状态，两条路：
 
@@ -93,7 +102,7 @@ git -C C:\Users\28041\vrcx-fork rebase --continue
 git -C C:\Users\28041\vrcx-fork rebase --abort
 ```
 
-不想手工处理，就跟 Qoder 说「把 vrcx-fork 的 feature/bio-history rebase 到最新上游并修好冲突」。
+不想手工处理，就跟 Qoder 说「把 vrcx-fork 的 my-vrcx rebase 到最新上游并修好冲突」。
 
 顺带说明：`sync.ps1` 会拦下「分支版本 ≠ 已安装版本」的部署，就是为了防止你把旧前端装到新宿主上。真要知道自己在做什么，加 `-Force` 可绕过。
 
