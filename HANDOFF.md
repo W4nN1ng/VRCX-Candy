@@ -1,0 +1,66 @@
+# 接手说明（写给下一个 AI）
+
+这份文档假设你完全没看过之前的对话。读完它你就能接着干活。用户是中文使用者、非程序员、VRChat 内容创作者；他要详细解释，并且欢迎你在他提的需求之外顺手加相关功能。
+
+## 1. 你在哪、手上有什么
+
+| 东西 | 位置 |
+| --- | --- |
+| 代码仓库 | `C:\Users\28041\vrcx-fork`（git，当前分支 `my-vrcx`） |
+| 上游官方 | https://github.com/vrcx-team/VRCX —— remote `upstream`（ghfast.top 镜像）、`upstream_github`（直连） |
+| 你的 GitHub 私有仓库 | `git@github.com-vrcx:W4nN1ng/VRCX-sweetCandy.git`（SSH 密钥 `~/.ssh/id_ed25519_github_vrcx`，主机别名 `github.com-vrcx`） |
+| 部署目标 | `E:\VRCX\html`（CefSharp 版 VRCX，前端就是一堆静态文件，换掉即生效） |
+| 维护脚本 | `C:\Users\28041\vrcx-mod`（sync/update/check-update/rollback/push，配 `.cmd` 入口；`config.ps1` 集中配置；`维护指南.md` 是写给用户看的） |
+| 用户数据 | `C:\Users\28041\AppData\Roaming\VRCX\VRCX.sqlite3`（只读，脚本从不写它） |
+
+仓库分支模型：`master` = 官方原版一条线不动（rebase 基线）；`my-vrcx` = 所有自定义功能，**一个功能一个 commit**；GitHub 上还有个 `vrcx-mod` 分支存脚本和文档。部署只从 `my-vrcx`。**不要在 GitHub 网页上把任何分支合并进 master**，那会毁掉 rebase 基线。
+
+## 2. 已经完成的功能（my-vrcx 上从旧到新）
+
+1. `53a45002` 玩家简介历史：资料页简介卡片下显示上一条简介 + `BioHistoryDialog` 完整历史（逐词红绿 diff / 全文两种看法）。数据源 `feed_bio` 表。
+2. `e5a9a76a` 空简介噪声过滤：VRChat 接口刷新好友列表时偶发返回空 bio，库里 176 条有 81 条是这种假"清空"，读取时过滤掉。
+3. `f4e7c485` 好友足迹仪表盘：图表菜单新增"好友足迹"页，左栏选好友，右栏看概览卡 / Top 世界 / 周×24 时段热力 / 社群分布 / 按日分组时间线。数据源 `feed_gps` 表，聚合逻辑在 `src/shared/utils/friendFootprints.js`（纯函数，有 25 个单测）。
+
+约定：逻辑层（纯函数、DB 查询）有单测；**视图组件没有单测**（仓库里 HotWorlds/InstanceActivity/MutualFriends 等图表页也都没有，这是仓库惯例，不是遗漏）。
+
+## 3. 环境坑（不看会浪费你一小时）
+
+- **github.com 的 HTTPS 被 TLS 层掐断**（curl 28 / 000），但 **SSH 22 端口通**。拉代码用 `upstream`（镜像）或 `upstream_github` + 代理 `http://127.0.0.1:10090`（香蕉VPN 的系统代理，仅 VPN 开着时存在）。推送走 SSH，不需要梯子。
+- `npm ci` 必须带 `ELECTRON_SKIP_BINARY_DOWNLOAD=1`，否则 Electron 二进制从 github releases 下载失败。
+- PowerShell 执行策略是 `Restricted`，`.ps1` 不能直接跑；用 `vrcx-mod` 里的 `.cmd`。`.ps1` 文件必须存成 **UTF-8 带 BOM**，否则 PS 5.1 按 GBK 解析会把中文截断。
+- `vitest` 在**干净 master 上就有约 42 个测试文件失败**（Windows/jsdom 环境问题，与代码无关）。判断你的改动有没有引入回归，要**比对失败测试的集合**，不能看失败总数。基线可以 `git stash` 后跑一遍拿到。
+- 提交前必须过：`npx oxfmt <改过的文件>`、`npm run lint`、`npx vitest run <相关测试>`、`npx vite build src`。有 3 个文件本来就不符合 oxfmt（`.github/actions/build-electron/action.yaml`、`package.json`、`src-electron/main.js`），别去"修"它们。
+- 部署流程：关掉 VRCX（含托盘）→ `vrcx-sync.cmd`。**官方更新会重装整个 `E:\VRCX` 并覆盖 html**，之后要跑 `update.ps1`（rebase 到新版上游 + 体检 + 部署）。
+- PowerShell 里函数名不能叫 `Git`（和 `git` 命令大小写不敏感冲突，会无限递归）；git 往 stderr 写的正常提示会被 `$ErrorActionPreference='Stop'` 当异常，helper 里要临时降级。
+
+## 4. 数据口径（sqlite 只读）
+
+表前缀 = userId 去掉 `-` 和 `_`，例如 `usr292d12f57f2949a3b4da853ce0183d3c_feed_gps`。
+
+- `feed_gps`：每行是一次换位置事件。`time` 列是"距上次位置变更的毫秒数"，**同图换房时会重置**，所以只是下限；算停留时长要用相邻两行的时间差，间隔超过 12 小时视为 VRCX 没在跑、丢弃不计。
+- `feed_status`：`status` / `previous_status` + `status_description` / `previous_status_description`。状态值四种：`active`（绿 #2ed319）、`join me`（蓝 #00b8ff）、`ask me`（黄 #e97c03）、`busy`（红 #c80928）。颜色变量在 `src/styles/globals.css` 的 `--status-online/joinme/askme/busy`，class 映射在 `src/shared/utils/user.js` 的 `statusClass()`。
+- `feed_bio`：`bio` / `previous_bio`，约 46% 是接口噪声（见上）。
+- `friend_log_history`：`type` 为 `DisplayName` / `TrustLevel`，带 previous 值。
+- `feed_online_offline`：上下线事件。
+- **共同前提**：所有表只记录 VRCX 运行期间、且只记录好友。任何"完整历史"的说法都不成立，界面上要如实标注。
+
+## 5. 下一个任务（用户已提出，尚未开始）
+
+**好友状态灯统计**，精确到个人。用户原话的三点：
+
+1. 统计某个好友四种灯的使用占比（蓝/绿/黄/红各占百分之几），要可视化。
+2. 记录"什么时候是什么灯"，精确到分钟（例：12 月 6 日 6 点是蓝灯，13 点切黄灯，21 点回蓝灯），要可视化。
+3. 在这两点之上自由加相关功能，让用户更直观地看到好友状态变化。
+
+数据源就是 `feed_status`（当前库里 796 条，四种状态都有）+ `feed_online_offline`（用来区分"离线"这个第五种状态，否则占比会把离线时间漏掉或错算）。
+
+建议沿用足迹那套已验证的模式：`src/shared/utils/` 下写纯函数聚合层（带单测）→ `src/services/database/feed.js` 加按 userId 的查询 → `src/views/Charts/components/` 加页面 → 注册路由/导航（注意 `navMenuUtils.js` 的 `chartsKeys` 有 `every(key => definitionMap.has(key))` 的门槛，测试 fixture 也要同步加）→ 本地化用脚本插 14 个语言文件（zh-CN/zh-TW/ja 翻译，其余落英文）。
+
+占比的口径要先想清楚：是"在线期间四灯的时间占比"还是"含离线的全部时间占比"。建议前者为主、后者作为对照，并在界面上写明，否则数字会被误读。
+
+## 6. 干活的习惯
+
+- 一个功能一个 commit，message 写"为什么"而不是"改了哪个文件"。
+- 改完按第 3 节那四步验证，再 `vrcx-sync.cmd` 部署、`vrcx-push.cmd` 推 GitHub。
+- 部署前确认 VRCX 已关；部署后看 `AppData\Roaming\VRCX\logs\` 最新日志有没有 JS 报错。
+- 用户看不懂技术细节时，用生活化类比解释（账本/书签/存档点这类），并且主动说明"哪些做不到、为什么"。
