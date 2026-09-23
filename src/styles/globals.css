@@ -314,3 +314,25 @@ body {
     padding: 2px 2px;
     border-radius: 4px;
 }
+
+/* ── Custom wallpaper ──────────────────────────────────────────────────────
+   Everything here only applies while a wallpaper is switched on. The marker
+   class is added by applyWallpaper() in shared/utils/base/ui.js; without it
+   none of this matches and the app paints exactly as it always has.
+
+   A picture behind the interface can only be seen if the surfaces in front of
+   it stop being opaque, so they are re-declared here instead of in each
+   component. These rules sit at the end of the file on purpose: they tie on
+   specificity with `html.dark .x-container`, so source order is what decides.
+
+   The picture layer itself sits at z-index -1, which paints it above the body
+   background but below everything else, so the body needs no rule at all. */
+html.has-wallpaper .x-container,
+html.has-wallpaper .bg-background {
+    background-color: color-mix(in oklab, var(--background) var(--wallpaper-content-opacity, 85%), transparent);
+}
+
+html.has-wallpaper.dark .x-container,
+html.has-wallpaper .bg-sidebar {
+    background-color: color-mix(in oklab, var(--sidebar) var(--wallpaper-sidebar-opacity, 90%), transparent);
+}

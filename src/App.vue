@@ -6,6 +6,7 @@
             id="x-app"
             class="flex w-screen h-screen overflow-hidden cursor-default [&>.x-container]:pt-[15px]"
             :class="{ 'pt-7': isMacOS }">
+            <WallpaperLayer></WallpaperLayer>
             <RouterView></RouterView>
             <Toaster position="top-center" :theme="theme"></Toaster>
 
@@ -42,6 +43,7 @@
     import OtpDialogModal from './components/ui/dialog/OtpDialogModal.vue';
     import PromptDialogModal from './components/ui/dialog/PromptDialogModal.vue';
     import VRCXUpdateDialog from './components/dialogs/VRCXUpdateDialog.vue';
+    import WallpaperLayer from './components/WallpaperLayer.vue';
 
     import '@/styles/globals.css';
 

@@ -172,6 +172,100 @@
             </SettingsItem>
         </SettingsGroup>
 
+        <SettingsGroup :title="t('view.settings.appearance.wallpaper.header')">
+            <SettingsItem
+                :label="t('view.settings.appearance.wallpaper.enabled')"
+                :description="t('view.settings.appearance.wallpaper.enabled_description')">
+                <Switch
+                    :model-value="wallpaper.enabled"
+                    :disabled="!wallpaper.path"
+                    :ariaLabel="t('view.settings.appearance.wallpaper.enabled')"
+                    @update:modelValue="setWallpaperValue('enabled', !wallpaper.enabled)" />
+            </SettingsItem>
+
+            <SettingsItem
+                :label="t('view.settings.appearance.wallpaper.image')"
+                :description="wallpaper.path || t('view.settings.appearance.wallpaper.image_description')">
+                <div class="flex items-center gap-2">
+                    <Button variant="outline" size="sm" @click="pickWallpaper">
+                        {{ t('view.settings.appearance.wallpaper.choose') }}
+                    </Button>
+                    <Button v-if="wallpaper.path" variant="ghost" size="sm" @click="clearWallpaper">
+                        {{ t('view.settings.appearance.wallpaper.clear') }}
+                    </Button>
+                </div>
+            </SettingsItem>
+
+            <template v-if="wallpaper.path">
+                <!-- Live preview of the actual picture with the current settings, so a
+                     slider move can be judged without hunting for a window to resize. -->
+                <SettingsItem
+                    :label="t('view.settings.appearance.wallpaper.preview')"
+                    :description="t('view.settings.appearance.wallpaper.preview_description')">
+                    <div class="relative h-24 w-56 overflow-hidden rounded-md border bg-muted">
+                        <div
+                            v-if="wallpaperImageUrl"
+                            class="absolute inset-0 overflow-hidden"
+                            :style="{ ...wallpaperPreviewStyle, zIndex: 0 }"></div>
+                    </div>
+                </SettingsItem>
+
+                <SettingsItem :label="t('view.settings.appearance.wallpaper.fit_mode')">
+                    <ToggleGroup
+                        variant="outline"
+                        type="single"
+                        :model-value="wallpaper.fitMode"
+                        @update:modelValue="setWallpaperValue('fitMode', $event)">
+                        <ToggleGroupItem value="cover">
+                            {{ t('view.settings.appearance.wallpaper.fit_cover') }}
+                        </ToggleGroupItem>
+                        <ToggleGroupItem value="contain">
+                            {{ t('view.settings.appearance.wallpaper.fit_contain') }}
+                        </ToggleGroupItem>
+                    </ToggleGroup>
+                </SettingsItem>
+
+                <SettingsItem :label="t('view.settings.appearance.wallpaper.brightness')">
+                    <div class="w-56 max-w-full pt-1">
+                        <Slider v-model="wallpaperBrightness" :min="20" :max="200" :step="1" />
+                    </div>
+                </SettingsItem>
+
+                <SettingsItem :label="t('view.settings.appearance.wallpaper.blur')">
+                    <div class="w-56 max-w-full pt-1">
+                        <Slider v-model="wallpaperBlur" :min="0" :max="40" :step="1" />
+                    </div>
+                </SettingsItem>
+
+                <SettingsItem :label="t('view.settings.appearance.wallpaper.zoom')">
+                    <div class="w-56 max-w-full pt-1">
+                        <Slider v-model="wallpaperZoom" :min="100" :max="300" :step="1" />
+                    </div>
+                </SettingsItem>
+
+                <SettingsItem :label="t('view.settings.appearance.wallpaper.focus')">
+                    <div class="flex w-56 max-w-full flex-col gap-1 pt-1">
+                        <Slider v-model="wallpaperPositionX" :min="0" :max="100" :step="1" />
+                        <Slider v-model="wallpaperPositionY" :min="0" :max="100" :step="1" />
+                    </div>
+                </SettingsItem>
+
+                <SettingsItem
+                    :label="t('view.settings.appearance.wallpaper.content_opacity')"
+                    :description="t('view.settings.appearance.wallpaper.opacity_description')">
+                    <div class="w-56 max-w-full pt-1">
+                        <Slider v-model="wallpaperContentOpacity" :min="0" :max="100" :step="1" />
+                    </div>
+                </SettingsItem>
+
+                <SettingsItem :label="t('view.settings.appearance.wallpaper.sidebar_opacity')">
+                    <div class="w-56 max-w-full pt-1">
+                        <Slider v-model="wallpaperSidebarOpacity" :min="0" :max="100" :step="1" />
+                    </div>
+                </SettingsItem>
+            </template>
+        </SettingsGroup>
+
         <SettingsGroup :title="t('view.settings.appearance.display.header')">
             <SettingsItem :label="t('view.settings.appearance.appearance.show_instance_id')">
                 <Switch
@@ -466,7 +560,9 @@
     import { useAppearanceSettingsStore, useVrStore } from '@/stores';
 
     import { Switch } from '@/components/ui/switch';
+    import { Slider } from '@/components/ui/slider';
     import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+    import { wallpaperImageStyle } from '@/shared/utils';
     import { getLanguageName, languageCodes } from '@/localization';
     import { APP_CJK_FONT_PACKS, APP_FONT_CONFIG, APP_FONT_DEFAULT_KEY, APP_FONT_FAMILIES } from '@/shared/constants';
     import { Button } from '@/components/ui/button';
@@ -491,6 +587,8 @@
         displayVRCProfileThemes,
         displayVRCProfileBackgrounds,
         profileBackgroundOpacity,
+        wallpaper,
+        wallpaperImageUrl,
         displayVRCProfileCosmetics,
         appFontFamily,
         customFontFamily,
@@ -517,10 +615,68 @@
 
     const appLanguageDisplayName = computed(() => getLanguageName(String(appLanguage.value)));
 
+    const wallpaperPreviewStyle = computed(() => wallpaperImageStyle(wallpaper.value, wallpaperImageUrl.value));
+
+    /**
+     * Bridges a wallpaper setting to a slider.
+     *
+     * Sliders work in whole numbers, so a setting stored as a fraction is scaled on
+     * the way in and back on the way out.
+     *
+     * @param {string} key - Field on the wallpaper settings object
+     * @param {number} scale - Multiplier between the setting and the slider value
+     * @returns {object} A writable computed holding the slider's array value
+     */
+    function wallpaperSlider(key, scale) {
+        return computed({
+            get: () => [Math.round(Number(wallpaper.value[key]) * scale)],
+            set: (value) => {
+                const next = Array.isArray(value) ? value[0] : value;
+                if (typeof next === 'number' && Number.isFinite(next)) {
+                    setWallpaperValue(key, next / scale);
+                }
+            }
+        });
+    }
+
+    const wallpaperBrightness = wallpaperSlider('brightness', 100);
+    const wallpaperBlur = wallpaperSlider('blur', 1);
+    const wallpaperZoom = wallpaperSlider('zoom', 100);
+    const wallpaperPositionX = wallpaperSlider('positionX', 1);
+    const wallpaperPositionY = wallpaperSlider('positionY', 1);
+    const wallpaperContentOpacity = wallpaperSlider('contentOpacity', 100);
+    const wallpaperSidebarOpacity = wallpaperSlider('sidebarOpacity', 100);
+
+    async function pickWallpaper() {
+        try {
+            const filePath = LINUX
+                ? await window.electron.openFileDialog()
+                : await AppApi.OpenFileSelectorDialog(
+                      wallpaper.value.path || '',
+                      '.png',
+                      'Images (*.png;*.jpg;*.jpeg;*.webp;*.gif;*.bmp)|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.bmp'
+                  );
+            if (!filePath) {
+                return;
+            }
+            setWallpaperValue('path', filePath);
+            setWallpaperValue('enabled', true);
+        } catch (error) {
+            console.error('Failed to choose a wallpaper', error);
+            toast.error(t('view.settings.appearance.wallpaper.pick_failed'));
+        }
+    }
+
+    function clearWallpaper() {
+        setWallpaperValue('enabled', false);
+        setWallpaperValue('path', '');
+    }
+
     const {
         setDisplayVRCProfileThemes,
         setDisplayVRCProfileBackgrounds,
         setProfileBackgroundOpacity,
+        setWallpaperValue,
         setDisplayVRCProfileCosmetics,
         setHideNicknames,
         setShowInstanceIdInLocation,

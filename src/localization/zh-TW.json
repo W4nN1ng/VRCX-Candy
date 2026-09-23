@@ -1176,6 +1176,29 @@
                 "friend_log": {
                     "header": "好友紀錄",
                     "hide_unfriends": "隱藏解除好友"
+                },
+                "wallpaper": {
+                    "header": "壁紙",
+                    "enabled": "自訂壁紙",
+                    "enabled_description": "在介面後面顯示你自己的圖片",
+                    "image": "圖片",
+                    "image_description": "還沒有選擇圖片",
+                    "choose": "選擇",
+                    "clear": "移除",
+                    "preview": "預覽",
+                    "preview_description": "套用目前參數的真實效果",
+                    "fit_mode": "填滿方式",
+                    "fit_cover": "鋪滿視窗",
+                    "fit_contain": "完整顯示",
+                    "brightness": "亮度",
+                    "blur": "模糊",
+                    "zoom": "縮放",
+                    "focus": "焦點位置",
+                    "content_opacity": "內容區不透明度",
+                    "sidebar_opacity": "側邊欄不透明度",
+                    "opacity_description": "如果圖片太花導致看不清文字，把它調低",
+                    "missing": "選定的壁紙讀不出來，已經自動關掉了",
+                    "pick_failed": "打不開這張圖片"
                 }
             },
             "notifications": {

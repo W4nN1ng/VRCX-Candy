@@ -1188,6 +1188,29 @@
                 "friend_log": {
                     "header": "好友日志",
                     "hide_unfriends": "隐藏 “删除好友” （或被删好友）事件"
+                },
+                "wallpaper": {
+                    "header": "壁纸",
+                    "enabled": "自定义壁纸",
+                    "enabled_description": "在界面后面显示你自己的图片",
+                    "image": "图片",
+                    "image_description": "还没有选择图片",
+                    "choose": "选择",
+                    "clear": "移除",
+                    "preview": "预览",
+                    "preview_description": "应用了当前参数的真实效果",
+                    "fit_mode": "填充方式",
+                    "fit_cover": "铺满窗口",
+                    "fit_contain": "完整显示",
+                    "brightness": "亮度",
+                    "blur": "模糊",
+                    "zoom": "缩放",
+                    "focus": "焦点位置",
+                    "content_opacity": "内容区不透明度",
+                    "sidebar_opacity": "侧边栏不透明度",
+                    "opacity_description": "如果图片太花导致看不清文字，把它调低",
+                    "missing": "选定的壁纸读不出来，已经自动关掉了",
+                    "pick_failed": "打不开这张图片"
                 }
             },
             "notifications": {

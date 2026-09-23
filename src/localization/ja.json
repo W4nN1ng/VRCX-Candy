@@ -1173,6 +1173,29 @@
                 "friend_log": {
                     "header": "フレンドログ",
                     "hide_unfriends": "フレンド解除を非表示にする"
+                },
+                "wallpaper": {
+                    "header": "壁紙",
+                    "enabled": "カスタム壁紙",
+                    "enabled_description": "インターフェースの背後に好きな画像を表示します",
+                    "image": "画像",
+                    "image_description": "まだ画像が選ばれていません",
+                    "choose": "選択",
+                    "clear": "削除",
+                    "preview": "プレビュー",
+                    "preview_description": "現在の設定を反映した実際の表示",
+                    "fit_mode": "表示方法",
+                    "fit_cover": "ウィンドウを埋める",
+                    "fit_contain": "全体を表示",
+                    "brightness": "明るさ",
+                    "blur": "ぼかし",
+                    "zoom": "ズーム",
+                    "focus": "焦点位置",
+                    "content_opacity": "コンテンツの不透明度",
+                    "sidebar_opacity": "サイドバーの不透明度",
+                    "opacity_description": "画像で文字が読みにくい場合は下げてください",
+                    "missing": "選んだ壁紙を読み込めなかったため、オフにしました",
+                    "pick_failed": "画像を開けませんでした"
                 }
             },
             "notifications": {

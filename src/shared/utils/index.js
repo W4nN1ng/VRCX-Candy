@@ -20,6 +20,7 @@ export * from './platformUtils';
 export * from './setting';
 export * from './urlUtils';
 export * from './user';
+export * from './wallpaper';
 export * from './gallery';
 export * from './location';
 export * from './invite';

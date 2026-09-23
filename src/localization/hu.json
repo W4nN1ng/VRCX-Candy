@@ -1197,6 +1197,29 @@
                 "friend_log": {
                     "header": "Barátnapló",
                     "hide_unfriends": "Barátság megszüntetések elrejtése"
+                },
+                "wallpaper": {
+                    "header": "Wallpaper",
+                    "enabled": "Custom wallpaper",
+                    "enabled_description": "Show a picture of your own behind the interface",
+                    "image": "Picture",
+                    "image_description": "No picture chosen yet",
+                    "choose": "Choose",
+                    "clear": "Remove",
+                    "preview": "Preview",
+                    "preview_description": "The real picture with the current settings applied",
+                    "fit_mode": "Fit",
+                    "fit_cover": "Fill the window",
+                    "fit_contain": "Show the whole picture",
+                    "brightness": "Brightness",
+                    "blur": "Blur",
+                    "zoom": "Zoom",
+                    "focus": "Focus point",
+                    "content_opacity": "Content opacity",
+                    "sidebar_opacity": "Sidebar opacity",
+                    "opacity_description": "Lower this if the picture makes the text hard to read",
+                    "missing": "The chosen wallpaper could not be read, so it has been turned off",
+                    "pick_failed": "Could not open that picture"
                 }
             },
             "notifications": {

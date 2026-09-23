@@ -18,12 +18,13 @@ import {
     applyAppCjkFontPack,
     HueToHex,
     applyAppFontFamily,
+    applyWallpaper,
     changeAppThemeStyle,
     changeHtmlLangAttribute,
     getThemeMode,
     updateTrustColorClasses
 } from '../../shared/utils/base/ui';
-import { computeTrustLevel, getNameColour } from '../../shared/utils';
+import { WALLPAPER_DEFAULTS, computeTrustLevel, getNameColour, normalizeWallpaperSettings } from '../../shared/utils';
 import { database } from '../../services/database';
 
 import { loadLocalizedStrings } from '../../plugins';
@@ -63,6 +64,13 @@ export const useAppearanceSettingsStore = defineStore(
         const displayVRCProfileThemes = ref(false);
         const displayVRCProfileBackgrounds = ref(false);
         const profileBackgroundOpacity = ref(0.5);
+        // The wallpaper is one object rather than a ref per knob: they are only ever
+        // read together, and keeping them as a single config row means one write.
+        const wallpaper = ref({ ...WALLPAPER_DEFAULTS });
+        // The decoded picture is deliberately not persisted alongside the settings -
+        // it is only ever a cache so the settings preview and the layer behind the
+        // app share one read of the file.
+        const wallpaperImageUrl = ref('');
         const displayVRCProfileCosmetics = ref(false);
         const hideNicknames = ref(false);
         const showInstanceIdInLocation = ref(false);
@@ -139,6 +147,10 @@ export const useAppearanceSettingsStore = defineStore(
 
         async function initAppearanceSettings() {
             const { initThemeMode, isDarkMode: initDarkMode } = await getThemeMode(configRepository);
+            // Applied before the rest so the surfaces are already translucent on the
+            // first paint rather than flashing opaque and then changing.
+            wallpaper.value = normalizeWallpaperSettings(await configRepository.getObject('VRCX_wallpaper', null));
+            applyWallpaper(wallpaper.value);
             const fallbackDarkTheme = THEME_CONFIG[initThemeMode]?.isDark === true ? initThemeMode : 'dark';
             const [
                 appLanguageConfig,
@@ -520,6 +532,28 @@ export const useAppearanceSettingsStore = defineStore(
         function setProfileBackgroundOpacity(value) {
             profileBackgroundOpacity.value = value;
             configRepository.setFloat('VRCX_profileBackgroundOpacity', value);
+        }
+
+        /**
+         * Change one wallpaper knob, persist the whole object and repaint.
+         *
+         * Values are normalized on the way in so a bad number from the UI can never
+         * reach the CSS.
+         *
+         * @param {string} key
+         * @param {unknown} value
+         */
+        function setWallpaperValue(key, value) {
+            wallpaper.value = normalizeWallpaperSettings({ ...wallpaper.value, [key]: value });
+            configRepository.setObject('VRCX_wallpaper', wallpaper.value);
+            applyWallpaper(wallpaper.value);
+        }
+
+        /**
+         * @param {string} url - Data URL of the decoded picture, or empty for none
+         */
+        function setWallpaperImageUrl(url) {
+            wallpaperImageUrl.value = String(url || '');
         }
 
         function setDisplayVRCProfileCosmetics() {
@@ -906,6 +940,8 @@ export const useAppearanceSettingsStore = defineStore(
             displayVRCProfileThemes,
             displayVRCProfileBackgrounds,
             profileBackgroundOpacity,
+            wallpaper,
+            wallpaperImageUrl,
             displayVRCProfileCosmetics,
             hideNicknames,
             showInstanceIdInLocation,
@@ -952,6 +988,8 @@ export const useAppearanceSettingsStore = defineStore(
             setDisplayVRCProfileThemes,
             setDisplayVRCProfileBackgrounds,
             setProfileBackgroundOpacity,
+            setWallpaperValue,
+            setWallpaperImageUrl,
             setDisplayVRCProfileCosmetics,
             setHideNicknames,
             setShowInstanceIdInLocation,

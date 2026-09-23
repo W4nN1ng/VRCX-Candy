@@ -11,7 +11,10 @@ import {
 } from '../../constants';
 import { i18n } from '../../../plugins/i18n';
 import { router } from '../../../plugins/router';
+import { normalizeWallpaperSettings, wallpaperCssVariables } from '../wallpaper';
 import { textToHex } from './string';
+
+const WALLPAPER_CLASS = 'has-wallpaper';
 
 import configRepository from '../../../services/config.js';
 
@@ -235,6 +238,30 @@ function applyAppCjkFontPack(packKey) {
     ensureAppCjkFontPackLinks(resolved.key);
 
     return resolved;
+}
+
+/**
+ * Push the wallpaper settings onto the document.
+ *
+ * The marker class is the whole switch: while it is absent none of the rules that
+ * make the app surfaces translucent apply, so turning the wallpaper off leaves the
+ * ordinary look byte for byte.
+ *
+ * @param {object} settings - Raw settings, normalized here
+ */
+function applyWallpaper(settings) {
+    const normalized = normalizeWallpaperSettings(settings);
+    const root = document.documentElement;
+    root.classList.toggle(WALLPAPER_CLASS, normalized.enabled);
+    if (!normalized.enabled) {
+        return normalized;
+    }
+    const variables = wallpaperCssVariables(normalized);
+    root.style.setProperty('--wallpaper-brightness', variables.brightness);
+    root.style.setProperty('--wallpaper-blur', variables.blur);
+    root.style.setProperty('--wallpaper-content-opacity', variables.contentOpacity);
+    root.style.setProperty('--wallpaper-sidebar-opacity', variables.sidebarOpacity);
+    return normalized;
 }
 
 function changeAppThemeStyle(themeMode) {
@@ -491,6 +518,7 @@ export {
     refreshCustomScript,
     applyAppFontFamily,
     applyAppCjkFontPack,
+    applyWallpaper,
     HueToHex,
     HSVtoRGB,
     formatJsonVars,
