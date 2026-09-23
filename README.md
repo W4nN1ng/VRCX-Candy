@@ -29,8 +29,21 @@
 C:\Users\28041\vrcx-mod\vrcx-check.cmd      只读体检，随时可跑
 C:\Users\28041\vrcx-mod\vrcx-sync.cmd       构建 + 部署当前分支
 C:\Users\28041\vrcx-mod\vrcx-update.cmd     官方更新后 rebase + 部署
+C:\Users\28041\vrcx-mod\vrcx-push.cmd       保存改动并推到 GitHub 备份
 C:\Users\28041\vrcx-mod\vrcx-rollback.cmd   回滚前端
 ```
+
+## 备份在哪
+
+私有仓库 `git@github.com-vrcx:W4nN1ng/VRCX-sweetCandy.git`，三个分支：
+
+| 分支 | 内容 |
+| --- | --- |
+| `master` | 官方原版代码，未改动，用来对照和 rebase |
+| `feature/bio-history` | 官方 + 简介历史功能 |
+| `vrcx-mod` | 这个文件夹的全部内容（脚本 + 指南 + patch） |
+
+推送走 SSH 22 端口，**不需要开梯子**。换电脑怎么恢复见《维护指南》第六部分。
 
 参数照 `.ps1` 的用法加在后面，例如 `vrcx-update.cmd -DryRun`、`vrcx-rollback.cmd -Stock`。
 （想让自己写的 `.ps1` 也能直接跑，可以 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`，我没替你改。）
