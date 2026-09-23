@@ -120,7 +120,13 @@ namespace VRCX
 
         private static bool IsDuplicateProcessRunning(VrcxLaunchArguments launchArguments)
         {
-            var processes = Process.GetProcessesByName("VRCX");
+            // Both names, on purpose. This build keeps its settings and database in the
+            // same %APPDATA%\VRCX folder the original uses, and two programs writing to
+            // one database is how it ends up corrupted, so whichever of the two is
+            // already running is reason enough for the second one not to start.
+            var processes = Process.GetProcessesByName("VRCX")
+                .Concat(Process.GetProcessesByName(Program.ProductName))
+                .ToArray();
             var isDuplicateProcessRunning = false;
             foreach (var process in processes)
             {
@@ -160,6 +166,19 @@ namespace VRCX
                 var processArguments = ParseArgs(commandLine.Split(' '));
                 if (processArguments.ConfigDirectory == launchArguments.ConfigDirectory)
                 {
+#if !LINUX
+                    if (!string.Equals(process.ProcessName, Program.ProductName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // That is the original VRCX rather than a second copy of this one.
+                        // Handing over to it silently would look like this program failing
+                        // to open, so it says what actually happened.
+                        MessageBox.Show(
+                            $"The original VRCX is already running, and it uses the same database as {Program.ProductName}.\n\n" +
+                            $"Close VRCX and start {Program.ProductName} again.",
+                            Program.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        Environment.Exit(0);
+                    }
+#endif
                     isDuplicateProcessRunning = true;
                     break;
                 }

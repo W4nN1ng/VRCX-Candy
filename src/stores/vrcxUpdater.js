@@ -61,6 +61,13 @@ export const useVRCXUpdaterStore = defineStore('VRCXUpdater', () => {
             noUpdater.value = true;
         }
 
+        // Always off in this build. The only update that exists to download is the
+        // upstream one, and installing it would replace this fork and take every added
+        // feature with it - so the controls are hidden rather than left there to be
+        // clicked. It is also what keeps %APPDATA%\VRCX free of a pending update.exe,
+        // which the shared data folder would otherwise hand to the other build.
+        noUpdater.value = true;
+
         const [VRCX_autoUpdateVRCX, VRCX_id] = await Promise.all([
             configRepository.getString('VRCX_autoUpdateVRCX', 'Auto Download'),
             configRepository.getString('VRCX_id', '')

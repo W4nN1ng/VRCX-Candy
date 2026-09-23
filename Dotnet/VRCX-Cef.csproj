@@ -11,22 +11,25 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationRevision>0</ApplicationRevision>
     <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
-    <AssemblyTitle>VRCX</AssemblyTitle>
-    <Product>VRCX</Product>
+    <!-- The identity of this fork. Copyright and RepositoryUrl stay pointed at upstream
+         on purpose: this is their code under the MIT licence, and the attribution is
+         the whole of what the licence asks for. -->
+    <AssemblyTitle>VRCX-Candy</AssemblyTitle>
+    <Product>VRCX-Candy</Product>
     <Copyright>vrcx-team, pypy, natsumi</Copyright>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
-    <Title>VRCX</Title>
-    <Description>VRCX</Description>
-    <PackageIcon>..\images\VRCX.png</PackageIcon>
+    <Title>VRCX-Candy</Title>
+    <Description>VRCX-Candy</Description>
+    <PackageIcon>..\images\VRCX-Candy.png</PackageIcon>
     <RepositoryUrl>https://github.com/vrcx-team/VRCX</RepositoryUrl>
     <ResourceLanguages>en</ResourceLanguages>
     <SatelliteResourceLanguages>en-US;en</SatelliteResourceLanguages>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
-    <AssemblyName>VRCX</AssemblyName>
+    <AssemblyName>VRCX-Candy</AssemblyName>
     <RootNamespace>VRCX</RootNamespace>
-    <PackageId>VRCX</PackageId>
-    <Company>VRCX</Company>
+    <PackageId>VRCX-Candy</PackageId>
+    <Company>VRCX-Candy</Company>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
     <!-- Fix fail fast exception -->
@@ -43,7 +46,7 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <ApplicationIcon>..\images\VRCX.ico</ApplicationIcon>
+    <ApplicationIcon>..\images\VRCX-Candy.ico</ApplicationIcon>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -82,13 +85,13 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>openvr_api.dll</TargetPath>
     </None>
-    <Content Include="..\images\VRCX.ico">
+    <Content Include="..\images\VRCX-Candy.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="..\images\VRCX_notify.ico">
+    <Content Include="..\images\VRCX-Candy_notify.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="..\images\VRCX.png">
+    <Content Include="..\images\VRCX-Candy.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
@@ -116,7 +119,7 @@
   </Target>
 
   <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="$(IsWindows)">
-    <Exec Command="&quot;$(ProjectDir)..\Dotnet\build-tools\Topten.nvpatch.exe&quot; --enable &quot;$(ProjectDir)..\build\Cef\VRCX.exe&quot;" />
+    <Exec Command="&quot;$(ProjectDir)..\Dotnet\build-tools\Topten.nvpatch.exe&quot; --enable &quot;$(ProjectDir)..\build\Cef\VRCX-Candy.exe&quot;" />
   </Target>
 
   <ItemGroup>

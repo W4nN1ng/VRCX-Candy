@@ -15,10 +15,32 @@ namespace VRCX
 {
     public static class Program
     {
+        /// <summary>
+        /// The name this build goes by, wherever a person reads it.
+        /// </summary>
+        /// <remarks>
+        /// Version deliberately does not carry it. That string is the API user agent and
+        /// what the updater compares releases against, so it keeps saying VRCX - which is
+        /// also the version this build is based on and what the user needs to see when
+        /// reporting a problem upstream.
+        /// </remarks>
+        public const string ProductName = "VRCX-Candy";
+
+        /// <summary>
+        /// What the executable is called, for the places that have to start it again.
+        /// </summary>
+        public const string ExecutableName = ProductName + ".exe";
+
         public static string BaseDirectory { get; private set; }
         public static string AppDataDirectory;
         public static string ConfigLocation { get; private set; }
         public static string Version { get; private set; }
+
+        /// <summary>
+        /// What the window and the taskbar call this program.
+        /// </summary>
+        public static string WindowTitle { get; private set; }
+
         public static bool LaunchDebug;
         private static readonly Logger logger = LogManager.GetCurrentClassLogger();
         public static AppApi AppApiInstance { get; private set; }
@@ -71,15 +93,15 @@ namespace VRCX
 
                 // look for trailing git hash "-22bcd96" to indicate nightly build
                 var version = versionFile.Split('-');
-                if (version.Length > 0 && version[^1].Length == 7)
-                    Version = $"VRCX Nightly {versionFile}";
-                else
-                    Version = $"VRCX {versionFile}";
+                var channel = version.Length > 0 && version[^1].Length == 7 ? "Nightly " : string.Empty;
+                Version = $"VRCX {channel}{versionFile}";
+                WindowTitle = $"{ProductName} {channel}{versionFile}";
             }
             catch (Exception ex)
             {
                 logger.Error(ex, "Failed to read version file");
                 Version = "VRCX Nightly Build";
+                WindowTitle = $"{ProductName} Nightly Build";
             }
         }
 
@@ -224,7 +246,11 @@ namespace VRCX
             if (StartupArgs.LaunchArguments.IsOverlay)
                 OverlayProgram.OverlayMain();
 
-            Update.Check();
+            // Deliberately not calling Update.Check() here. The only update it knows how
+            // to install is the upstream build, which would replace this one and take
+            // every added feature with it. It also reads update.exe out of the shared
+            // %APPDATA%\VRCX folder, so a copy left behind by an upstream install would
+            // be run from here on the next launch.
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);

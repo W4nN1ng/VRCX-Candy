@@ -9,7 +9,13 @@ obj1/
 *.user
 
 Installer/version_define.nsh
+candy/version_define.nsh
+candy/__pycache__/
 bun.lock
+
+# Build output, not source. candy/build.ps1 writes these to the repository root.
+VRCX-Candy-Setup.exe
+VRCX-Candy-*-portable.zip
 
 .env.sentry-build-plugin
 AGENTS.md

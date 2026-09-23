@@ -554,13 +554,14 @@ namespace VRCX
                     }
 
                     ulong thumbnailHandle = 0;
-                    err = overlay.CreateDashboardOverlay("VRCX", "VRCX", ref dashboardHandle, ref thumbnailHandle);
+                    err = overlay.CreateDashboardOverlay(
+                        Program.ProductName, Program.ProductName, ref dashboardHandle, ref thumbnailHandle);
                     if (err != EVROverlayError.None)
                     {
                         return err;
                     }
 
-                    var iconPath = Path.Join(Program.BaseDirectory, "VRCX.png");
+                    var iconPath = Path.Join(Program.BaseDirectory, $"{Program.ProductName}.png");
                     err = overlay.SetOverlayFromFile(thumbnailHandle, iconPath);
                     if (err != EVROverlayError.None)
                     {

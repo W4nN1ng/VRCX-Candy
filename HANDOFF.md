@@ -21,6 +21,9 @@
 2. `e5a9a76a` 空简介噪声过滤：VRChat 接口刷新好友列表时偶发返回空 bio，库里 176 条有 81 条是这种假"清空"，读取时过滤掉。
 3. `f4e7c485` 好友足迹仪表盘：图表菜单新增"好友足迹"页，左栏选好友，右栏看概览卡 / Top 世界 / 周×24 时段热力 / 社群分布 / 按日分组时间线。数据源 `feed_gps` 表，聚合逻辑在 `src/shared/utils/friendFootprints.js`（纯函数，有 25 个单测）。
 4. `23b9945e` 好友状态灯：图表菜单新增"好友状态灯"页，左栏选好友，右栏看概览卡 / 四灯占比 / 按天分组精确到分钟的时间线 / 24 小时灯分布 / 文案改动记录。数据源 `feed_status` + `feed_online_offline`，聚合逻辑在 `src/shared/utils/friendStatusLights.js`（纯函数，有 30 个单测）。资料页也并排加了入口。**动手前务必读第 4 节的 `feed_status` 两条**——这个功能有两个"按直觉写就会算错"的坑。
+5. `9af63ea4` 好友同游：图表菜单新增"好友同游"页，记录"我不在场时好友们一起去了哪"。数据源 `feed_gps` + `gamelog_location`，聚合逻辑在 `src/shared/utils/friendTogether.js`。**扫描线统计人数必须在成员被移除之前取快照**——在 `delete` 之后数人数会让每个事件都消失（踩过，见 `findTogetherEvents` 的注释和回归测试）。同场的人按**整组**归并，不要拆成两两组合。
+6. `ea702b13` 自定义壁纸：设置 → 界面里选图，可调亮度 / 模糊 / 缩放 / 焦点 / 填充模式，内容区和侧边栏各有不透明度。逻辑在 `src/shared/utils/wallpaper.js`（纯函数 + 单测）。**踩坑记录**：`html.dark` 给根元素设了背景色，于是 `body` 的背景不再上浮到画布、而是当普通块背景绘制，会盖住 `z-index:-1` 的壁纸层——所以 `html.has-wallpaper body { background: transparent; }` 这句不能删。另外改 CSS 时注意 `globals.css` 里壁纸那段的**书写顺序**（它和 `html.dark .x-container` 同优先级，靠后覆盖）。
+7. `fe715c65` 加群弹窗：登录后一次性询问是否加入作者的群组。`src/components/onboarding/GroupInviteDialog.vue` + `src/shared/constants/groupInvite.js`。**判定成员身份必须直接查 `groupRequest.getGroup()` 的 `membershipStatus`，不能用 `groupStore.currentUserGroups`**——那个 Map 在登录时先用配置表 `vrcx_currentusergroups_<userId>` 的**上次会话缓存**填一遍，之后才发网络请求，于是"上次还是成员、这次已经退群"的人会被当成成员，弹窗被静默吞掉且从此不再出现。规则抽在 `src/shared/utils/groupInvite.js`（纯函数 + 单测）。
 
 约定：逻辑层（纯函数、DB 查询）有单测；**视图组件没有单测**（仓库里 HotWorlds/InstanceActivity/MutualFriends 等图表页也都没有，这是仓库惯例，不是遗漏）。
 
@@ -33,6 +36,7 @@
 - 提交前必须过：`npx oxfmt <改过的文件>`、`npm run lint`、`npx vitest run <相关测试>`、`npx vite build src`。有 3 个文件本来就不符合 oxfmt（`.github/actions/build-electron/action.yaml`、`package.json`、`src-electron/main.js`），别去"修"它们。
 - 部署流程：关掉 VRCX（含托盘）→ `vrcx-sync.cmd`。**官方更新会重装整个 `E:\VRCX` 并覆盖 html**，之后要跑 `update.ps1`（rebase 到新版上游 + 体检 + 部署）。
 - PowerShell 里函数名不能叫 `Git`（和 `git` 命令大小写不敏感冲突，会无限递归）；git 往 stderr 写的正常提示会被 `$ErrorActionPreference='Stop'` 当异常，helper 里要临时降级。
+- **`.ps1` 用 `powershell -ExecutionPolicy Bypass -File xxx.ps1` 跑最省事**（不用改机器策略，也不用 .cmd 包装）。`candy/build.ps1` 就是这么调的。本机原先没有 .NET SDK，现在装在 `C:\Users\28041\dotnet`（见第 6 节）。
 
 ## 4. 数据口径（sqlite 只读）
 
@@ -68,7 +72,39 @@
 
 **新图表页要在 7 个文件里注册，漏一个就出问题**（用 `grep -rn "charts-hot-worlds" src/` 逐条对，这是最省事的办法）：`plugins/router.js`、`shared/constants/ui.js`、`nav-menu/navLayoutDefaults.js`、`nav-menu/navMenuUtils.js` 的 `chartsKeys`（有 `every(key => definitionMap.has(key))` 的门槛，漏了**整个 charts 文件夹都不显示**）、`shared/constants/dashboard.js`、`stores/settings/appearance.js`、`Dashboard/components/panelRegistry.js`，外加 `nav-menu/__tests__/navMenuUtils.test.js` 里的 fixture 和期望数组。
 
-## 6. 干活的习惯
+## 6. 打包成独立程序（candy/）
+
+用户要的是**脱离原版 VRCX 也能装能跑**的一整套：`.exe` 安装包 + 解压即用的 zip。脚本都在 `candy/`。
+
+**工具链不在仓库里，是本机装的**（`.NET SDK` 和 `NSIS` 都装在用户目录）：
+
+- .NET 10 SDK：`C:\Users\28041\dotnet\`，用 `dotnet-install.ps1 -Channel 10.0 -InstallDir C:\Users\28041\dotnet` 装的。
+- NSIS 3.11 便携版：`C:\Users\28041\nsis\nsis-3.11\makensis.exe`（不用装，解压即用；仓库自带了 `nsisProcess`/`inetc`/`ApplicationID`/`ShellExecAsUser` 四个插件在 `Installer\Plugins\x86-unicode`）。
+- Python + Pillow（画图标、打包 zip）：`uv run --with pillow python ...`。
+
+一条命令跑完：
+
+```
+powershell -ExecutionPolicy Bypass -File candy\build.ps1
+```
+
+它会依次跑 `npm run prod`（前端 + licenses）→ `dotnet build Dotnet/VRCX-Cef.csproj --self-contained`（宿主，会沿用 PreBuild 的 junction 把 `build\html` 接到 `build\Cef\html`）→ `candy\make-portable.py` 出便携 zip → `candy\installer.nsi` 出安装包，最后把两个产物复制到桌面。加 `-SkipFrontend` 可跳过前端。
+
+**踩过的坑（每个都会静默出错，值得记住）**：
+
+- **改 `AssemblyName` 会让写死的进程名失效。** `StartupArgs.cs` 里 `Process.GetProcessesByName("VRCX")` 是防重复启动用的；改名成 `VRCX-Candy` 之后它认不出自己的第二个实例，**却仍然认得出原版 VRCX**。现在两个名字都查，而且当拦住的是原版时弹框说明——否则用户看到的只是"点了没反应"。
+- **`python` 的 `os.walk` 不跟进 junction。** `build\Cef\html` 是指向 `build\html` 的 junction，直接遍历 `build\Cef` 打出来的包**里面没有界面**。`make-portable.py` 是从 `build\html` 单独加进去的，`installer.nsi` 里也是一样的写法（`/x html` 排掉 junction，再 `SetOutPath "$INSTDIR\html"` 显式加一次）。
+- **别用 PowerShell 的 `Compress-Archive`**，它写非 ASCII 文件名时不带 UTF-8 标志位，包里的 `使用说明.txt` 会变成乱码。用 Python 的 `zipfile`。
+- **`version_define.nsh` 不能带 BOM**，NSIS 会把 BOM 读进版本号里。`build.ps1` 用 `Encoding::ASCII` 写它。
+- **NSIS 打一个包要 5-10 分钟**（666 MB 数据走 solid LZMA），别以为卡死了。
+- **`--config="C:\path\"` 这种结尾带反斜杠的引号会被 Windows 吞掉**，程序拿到非法路径后在 `Directory.CreateDirectory` 抛异常，弹出一个"crashed, open Discord for support?"的框。冒烟测试传参别带尾部反斜杠。
+- 冒烟测试要用 `--config=<空目录>` 隔离数据，**绝对不能**让测试实例碰到 `%APPDATA%\VRCX`——那是用户真实数据库。
+
+**数据目录是共用的**（用户选的）：新版和原版都读 `%APPDATA%\VRCX`，所以两边不能同时开。原版 VRCX 认不出 VRCX-Candy（它查的还是 "VRCX"），所以**从原版那一侧启动挡不住**，文档里必须写明。
+
+**上游自动更新已经关掉**（前端 `noUpdater = true` + 宿主注释掉了 `Update.Check()`）：它能装的只有官方版本，装完这个改版就没了。
+
+## 7. 干活的习惯
 
 - 一个功能一个 commit，message 写"为什么"而不是"改了哪个文件"。
 - **动手写代码之前，先拿真实数据库验一遍你的假设。** 好友状态灯那一轮，我原本的两个核心假设（"灯没变就是重复行"、"没记录的时间可以按上一个灯推算"）**都是错的**，是查了库才发现：前者会丢掉 21% 的真实事件，后者在短间隔下只有 8% 命中。查库很便宜——`node -e` 里 `require('node:sqlite')` 以 `readOnly: true` 打开 `C:\Users\28041\AppData\Roaming\VRCX\VRCX.sqlite3` 就能查，机器上没装 sqlite3 命令行但 Node 24 自带这个模块。**只读，永远别写它。**
