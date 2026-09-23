@@ -283,6 +283,59 @@ describe('feed.getPlayersWithStatusHistory', () => {
     });
 });
 
+describe('feed.getAllFriendGpsRows', () => {
+    beforeEach(() => {
+        mocks.execute.mockReset();
+    });
+
+    test('keeps the owning friend on every row', async () => {
+        mocks.execute.mockImplementation(async (callback) => {
+            callback(['2026-09-20T00:00:00.000Z', 'usr_1', 'Tester', 'wrld_1:123~region=jp', 'Alpha']);
+            return undefined;
+        });
+
+        const result = await feed.getAllFriendGpsRows();
+
+        expect(result).toEqual([
+            {
+                created_at: '2026-09-20T00:00:00.000Z',
+                user_id: 'usr_1',
+                display_name: 'Tester',
+                location: 'wrld_1:123~region=jp',
+                world_name: 'Alpha'
+            }
+        ]);
+        const sql = mocks.execute.mock.calls[0][1];
+        expect(sql).toContain('usr123_feed_gps');
+        expect(sql).toContain('ORDER BY user_id ASC, created_at ASC, id ASC');
+        expect(sql).not.toContain('WHERE');
+    });
+
+    test('adds the date filter only when a start date is given', async () => {
+        mocks.execute.mockImplementation(async () => undefined);
+
+        await feed.getAllFriendGpsRows('2026-09-01T00:00:00.000Z', 50);
+
+        expect(mocks.execute.mock.calls[0][1]).toContain('WHERE created_at >= @created_after');
+        expect(mocks.execute.mock.calls[0][1]).toContain('ORDER BY user_id ASC');
+        expect(mocks.execute.mock.calls[0][2]).toMatchObject({
+            '@created_after': '2026-09-01T00:00:00.000Z',
+            '@limit': 50
+        });
+    });
+
+    test('coerces null columns to empty strings', async () => {
+        mocks.execute.mockImplementation(async (callback) => {
+            callback(['2026-09-20T00:00:00.000Z', null, null, null, null]);
+            return undefined;
+        });
+
+        const result = await feed.getAllFriendGpsRows();
+
+        expect(result[0]).toMatchObject({ user_id: '', display_name: '', location: '', world_name: '' });
+    });
+});
+
 describe('feed.addBioToDatabase', () => {
     beforeEach(() => {
         mocks.executeNonQuery.mockReset();

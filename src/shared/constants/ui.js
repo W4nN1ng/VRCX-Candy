@@ -128,6 +128,13 @@ const navDefinitions = [
         routeName: 'charts-friend-status-lights'
     },
     {
+        key: 'charts-friend-together',
+        icon: 'ri-group-line',
+        tooltip: 'view.charts.friend_together.tab_label',
+        labelKey: 'view.charts.friend_together.tab_label',
+        routeName: 'charts-friend-together'
+    },
+    {
         key: 'tools',
         icon: 'ri-tools-line',
         tooltip: 'nav_tooltip.tools',

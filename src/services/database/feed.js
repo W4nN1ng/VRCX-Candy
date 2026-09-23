@@ -243,6 +243,41 @@ const feed = {
         return players;
     },
 
+    /**
+     * Loads every friend's location changes in one read, oldest first.
+     *
+     * The friend-together dashboard needs all of them at once to line up who was in
+     * which instance with whom, so unlike getGpsRowsForUserId this keeps user_id and
+     * display_name and is not filtered to one player.
+     *
+     * @param {string} [createdAfter] - ISO timestamp to start from, empty for everything.
+     * @param {number} maxEntries - Maximum number of rows to return.
+     * @returns {Promise<object[]>} Raw feed_gps rows including the owning friend.
+     */
+    async getAllFriendGpsRows(createdAfter = '', maxEntries = 200000) {
+        const rows = [];
+        let dateFilter = '';
+        const args = { '@limit': maxEntries };
+        if (createdAfter) {
+            dateFilter = 'WHERE created_at >= @created_after ';
+            args['@created_after'] = createdAfter;
+        }
+        await sqliteService.execute(
+            (dbRow) => {
+                rows.push({
+                    created_at: dbRow[0],
+                    user_id: dbRow[1] ?? '',
+                    display_name: dbRow[2] ?? '',
+                    location: dbRow[3] ?? '',
+                    world_name: dbRow[4] ?? ''
+                });
+            },
+            `SELECT created_at, user_id, display_name, location, world_name FROM ${dbVars.userPrefix}_feed_gps ${dateFilter}ORDER BY user_id ASC, created_at ASC, id ASC LIMIT @limit`,
+            args
+        );
+        return rows;
+    },
+
     addAvatarToDatabase(entry) {
         sqliteService.executeNonQuery(
             `INSERT OR IGNORE INTO ${dbVars.userPrefix}_feed_avatar (created_at, user_id, display_name, owner_id, avatar_name, current_avatar_image_url, current_avatar_thumbnail_image_url, previous_current_avatar_image_url, previous_current_avatar_thumbnail_image_url) VALUES (@created_at, @user_id, @display_name, @owner_id, @avatar_name, @current_avatar_image_url, @current_avatar_thumbnail_image_url, @previous_current_avatar_image_url, @previous_current_avatar_thumbnail_image_url)`,

@@ -36,7 +36,8 @@ export function createBaseDefaultNavLayout(t) {
                 'charts-mutual',
                 'charts-hot-worlds',
                 'charts-friend-footprints',
-                'charts-friend-status-lights'
+                'charts-friend-status-lights',
+                'charts-friend-together'
             ]
         },
         { type: 'item', key: 'tools' },

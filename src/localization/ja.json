@@ -771,6 +771,58 @@
                     "hint": "VRCX はステータスのカスタムテキストの変更も記録します。これはテキストだけが変わりステータスは変わらないため、上のタイムラインには出てきません",
                     "empty": "選択した期間にカスタムテキストの変更はありません"
                 }
+            },
+            "friend_together": {
+                "tab_label": "フレンド同席",
+                "header": "フレンド同席",
+                "empty": "フレンドが同じインスタンスに集まった記録はまだありません",
+                "empty_filtered": "現在の絞り込みに合う記録はありません",
+                "filters": {
+                    "without_me": "自分がいなかった時だけ",
+                    "three_plus": "3 人以上だけ"
+                },
+                "tips": {
+                    "coverage": "VRCX は起動中に、しかもフレンドの位置しか記録しません。「一緒」と判定するのは、同じインスタンスに記録されていて時間が重なっている場合です",
+                    "filters": "途中から来た人や先に帰った人がいても、集まりは 1 件として数えます。名前をホバーすると実際にいた時間が出ます"
+                },
+                "period": {
+                    "days_7": "7 日",
+                    "days_30": "30 日",
+                    "days_90": "90 日",
+                    "all": "すべて"
+                },
+                "summary": {
+                    "events": "表示中",
+                    "while_offline": "件は自分がオフライン中"
+                },
+                "section": {
+                    "pairs": "よく一緒になる組み合わせ",
+                    "worlds": "よく集まるワールド",
+                    "timeline": "何があったか"
+                },
+                "stats": {
+                    "events": "集まりの回数",
+                    "days": "{count} 日間",
+                    "worlds": "ワールド数",
+                    "instances": "{count} インスタンス",
+                    "people": "関わったフレンド",
+                    "without_me": "うち {count} 件は自分抜き",
+                    "duration": "合計時間"
+                },
+                "unit": {
+                    "times": "{count} 回",
+                    "people": "{count} 人"
+                },
+                "self": {
+                    "there": "自分もいた",
+                    "elsewhere": "別の場所にいた",
+                    "offline": "オフラインだった"
+                },
+                "participant": {
+                    "all_along": "最初から最後まで",
+                    "span": "{from} から {to} だけ"
+                },
+                "unknown_world": "名前のないインスタンス"
             }
         },
         "tools": {

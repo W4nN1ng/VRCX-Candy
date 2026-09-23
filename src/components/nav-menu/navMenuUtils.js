@@ -44,7 +44,8 @@ export function sanitizeLayout(layout, hiddenKeys, definitionMap, allDefinitions
         'charts-mutual',
         'charts-hot-worlds',
         'charts-friend-footprints',
-        'charts-friend-status-lights'
+        'charts-friend-status-lights',
+        'charts-friend-together'
     ];
 
     const appendItemEntry = (key, target = normalized) => {

@@ -122,6 +122,11 @@ const routes = [
                 name: 'charts-friend-status-lights',
                 component: () => import('./../views/Charts/components/FriendStatusLights.vue')
             },
+            {
+                path: 'charts/friend-together',
+                name: 'charts-friend-together',
+                component: () => import('./../views/Charts/components/FriendTogether.vue')
+            },
             { path: 'tools', name: 'tools', component: Tools },
             {
                 path: 'tools/gallery',

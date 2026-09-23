@@ -113,7 +113,8 @@ export const useAppearanceSettingsStore = defineStore(
                 'charts-mutual',
                 'charts-hot-worlds',
                 'charts-friend-footprints',
-                'charts-friend-status-lights'
+                'charts-friend-status-lights',
+                'charts-friend-together'
             ].includes(currentRouteName);
         });
 

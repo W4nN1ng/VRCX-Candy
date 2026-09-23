@@ -13,6 +13,7 @@ export * from './fileUtils';
 export * from './friend';
 export * from './friendFootprints';
 export * from './friendStatusLights';
+export * from './friendTogether';
 export * from './group';
 export * from './instance';
 export * from './platformUtils';

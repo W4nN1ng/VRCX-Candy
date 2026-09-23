@@ -779,6 +779,58 @@
                     "hint": "VRCX 也会记录对灯上自定义文案的修改。这类改动只换文字不换灯，所以不会出现在上面的时间线里",
                     "empty": "所选时间范围内没有文案改动"
                 }
+            },
+            "friend_together": {
+                "tab_label": "好友同游",
+                "header": "好友同游",
+                "empty": "还没有记录到好友们凑在一起",
+                "empty_filtered": "当前筛选条件下没有符合的记录",
+                "filters": {
+                    "without_me": "只看我错过的",
+                    "three_plus": "只看三人以上"
+                },
+                "tips": {
+                    "coverage": "VRCX 只在它运行期间、且只对好友记录位置。「在一起」的判定是：两个人被记录在同一个实例里，且时间有重叠",
+                    "filters": "一次聚会只算一条，哪怕有人中途才来或者先走。鼠标移到名字上可以看到他实际待了多久"
+                },
+                "period": {
+                    "days_7": "7 天",
+                    "days_30": "30 天",
+                    "days_90": "90 天",
+                    "all": "全部"
+                },
+                "summary": {
+                    "events": "当前显示",
+                    "while_offline": "条发生在我没上线时"
+                },
+                "section": {
+                    "pairs": "经常凑在一起的好友",
+                    "worlds": "他们常聚的地图",
+                    "timeline": "发生了什么"
+                },
+                "stats": {
+                    "events": "聚会次数",
+                    "days": "跨 {count} 天",
+                    "worlds": "涉及地图",
+                    "instances": "共 {count} 个房间",
+                    "people": "涉及好友",
+                    "without_me": "其中 {count} 次我不在",
+                    "duration": "累计时长"
+                },
+                "unit": {
+                    "times": "{count} 次",
+                    "people": "{count} 人"
+                },
+                "self": {
+                    "there": "我在场",
+                    "elsewhere": "我在别处",
+                    "offline": "我没上线"
+                },
+                "participant": {
+                    "all_along": "全程都在",
+                    "span": "只在 {from} 到 {to}"
+                },
+                "unknown_world": "未命名房间"
             }
         },
         "tools": {

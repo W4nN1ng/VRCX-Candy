@@ -713,6 +713,58 @@
                     "hint": "VRCX also records edits to the custom text attached to a light. Those change the text without changing the light, so they never appear in the timeline above",
                     "empty": "No custom text was edited in the selected range"
                 }
+            },
+            "friend_together": {
+                "tab_label": "Friends Together",
+                "header": "Friends Together",
+                "empty": "No record of your friends gathering in one instance yet",
+                "empty_filtered": "No gathering matches the current filters",
+                "filters": {
+                    "without_me": "Only ones I missed",
+                    "three_plus": "Three or more friends"
+                },
+                "tips": {
+                    "coverage": "VRCX only sees where friends are while it is running, and only for friends. Two friends count as together when VRCX recorded them in the same instance at overlapping times",
+                    "filters": "A gathering is listed once even if someone joined late or left early. Hover a name to see how long they were actually there"
+                },
+                "period": {
+                    "days_7": "7 days",
+                    "days_30": "30 days",
+                    "days_90": "90 days",
+                    "all": "All"
+                },
+                "summary": {
+                    "events": "Showing",
+                    "while_offline": "while I was offline"
+                },
+                "section": {
+                    "pairs": "Pairs that keep meeting",
+                    "worlds": "Where they gather",
+                    "timeline": "What happened"
+                },
+                "stats": {
+                    "events": "Gatherings",
+                    "days": "over {count} days",
+                    "worlds": "Maps",
+                    "instances": "across {count} instances",
+                    "people": "Friends involved",
+                    "without_me": "{count} without me",
+                    "duration": "Total time"
+                },
+                "unit": {
+                    "times": "{count} times",
+                    "people": "{count} people"
+                },
+                "self": {
+                    "there": "I was there",
+                    "elsewhere": "I was elsewhere",
+                    "offline": "I was offline"
+                },
+                "participant": {
+                    "all_along": "There the whole time",
+                    "span": "Only {from} to {to}"
+                },
+                "unknown_world": "Unnamed instance"
             }
         },
         "tools": {

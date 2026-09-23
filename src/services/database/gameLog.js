@@ -1414,6 +1414,44 @@ const gameLog = {
     },
 
     /**
+     * Get the current user's own stays in each instance, oldest first.
+     *
+     * Unlike getCurrentUserOnlineSessions this also selects `location`, which is what
+     * lets the friend-together view tell "I was in that very instance" apart from
+     * "I was online somewhere else". A row stores `created_at` as the moment you left
+     * and `time` as how long you stayed, so a stay runs from created_at - time to
+     * created_at. Rows with no usable duration are dropped rather than reported as a
+     * zero length stay.
+     *
+     * @param {string} [createdAfter] - ISO timestamp to start from, empty for everything.
+     * @returns {Promise<{ location: string; startAt: number; endAt: number }[]>} Epoch ms ranges.
+     */
+    async getSelfLocationSegments(createdAfter = '') {
+        const segments = [];
+        let dateClause = '';
+        const params = {};
+        if (createdAfter) {
+            dateClause = 'WHERE created_at >= @createdAfter';
+            params['@createdAfter'] = createdAfter;
+        }
+        await sqliteService.execute(
+            (dbRow) => {
+                const endAt = Date.parse(dbRow[0]);
+                const location = String(dbRow[1] || '');
+                const time = Number(dbRow[2]) || 0;
+                const startAt = endAt - time;
+                if (!Number.isFinite(endAt) || !location || !(startAt < endAt)) {
+                    return;
+                }
+                segments.push({ location, startAt, endAt });
+            },
+            `SELECT created_at, location, time FROM gamelog_location ${dateClause} ORDER BY created_at ASC`,
+            params
+        );
+        return segments;
+    },
+
+    /**
      * Get current user's online sessions after a given timestamp (incremental).
      *
      * @param {string} afterCreatedAt - Only return rows created after this timestamp
