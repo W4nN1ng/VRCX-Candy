@@ -76,6 +76,7 @@
         <WhatsNewDialog />
         <SpotlightDialog />
         <GroupInviteDialog />
+        <WhatThisBuildAddsDialog />
     </template>
 </template>
 
@@ -112,6 +113,7 @@
     import WhatsNewDialog from '../../components/onboarding/WhatsNewDialog.vue';
     import SpotlightDialog from '../../components/onboarding/SpotlightDialog.vue';
     import GroupInviteDialog from '../../components/onboarding/GroupInviteDialog.vue';
+    import WhatThisBuildAddsDialog from '../../components/onboarding/WhatThisBuildAddsDialog.vue';
 
     const router = useRouter();
 

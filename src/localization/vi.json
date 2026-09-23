@@ -289,7 +289,6 @@
                     "brightness": "Brightness",
                     "blur": "Blur",
                     "zoom": "Zoom",
-                    "focus": "Focus point",
                     "content_opacity": "Content opacity",
                     "sidebar_opacity": "Sidebar opacity",
                     "opacity_description": "Lower this if the picture makes the text hard to read",
@@ -611,8 +610,42 @@
                 "decline": "No thanks",
                 "once_only": "This is asked once. You can join or leave the group at any time from your VRChat profile.",
                 "joined": "You have joined the group",
-                "requested": "Join request sent, it needs to be approved"
+                "requested": "Join request sent, it needs to be approved",
+                "members": "{count} members"
             }
+        },
+        "help": {
+            "title": "What this build adds",
+            "intro": "This is VRCX with extra features built on top. Everything the original does is still here; these are the additions.",
+            "features": {
+                "bio_history": {
+                    "title": "Bio history",
+                    "description": "A friend changing their profile text is recorded, so you can look back at what it used to say and read the two versions side by side."
+                },
+                "footprints": {
+                    "title": "Friend footprints",
+                    "description": "Charts has a page for where a friend has been: the maps they visit most, the hours they are usually around, and a day by day timeline."
+                },
+                "status_lights": {
+                    "title": "Status light history",
+                    "description": "How a friend divides their time between the four status lights, and exactly when each one was on, down to the minute."
+                },
+                "together": {
+                    "title": "Friends together",
+                    "description": "Records the times your friends were in a map together without you, so you can see what you missed. Also under Charts."
+                },
+                "wallpaper": {
+                    "title": "Custom wallpaper",
+                    "description": "Put a picture of your own behind the interface, with brightness, blur and crop controls. Settings, under Interface."
+                },
+                "group_invite": {
+                    "title": "The group prompt",
+                    "description": "The one time this build asks whether you want to join the group behind it. Answering either way is fine and it will not ask again."
+                }
+            },
+            "reopen_hint": "This screen is shown once. You can open it again from the help button at the top of the sidebar.",
+            "close": "Got it",
+            "open": "What this build adds"
         }
     },
     "dialog": {

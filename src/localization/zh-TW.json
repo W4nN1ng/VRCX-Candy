@@ -775,7 +775,7 @@
                 "empty_filtered": "目前篩選條件下沒有符合的紀錄",
                 "filters": {
                     "without_me": "只看我錯過的",
-                    "three_plus": "只看三人以上"
+                    "three_plus": "只看三人及以上"
                 },
                 "tips": {
                     "coverage": "VRCX 只在它執行期間、且只對好友記錄位置。「在一起」的判定是：兩個人被記錄在同一個實例裡，且時間有重疊",
@@ -1193,7 +1193,6 @@
                     "brightness": "亮度",
                     "blur": "模糊",
                     "zoom": "縮放",
-                    "focus": "焦點位置",
                     "content_opacity": "內容區不透明度",
                     "sidebar_opacity": "側邊欄不透明度",
                     "opacity_description": "如果圖片太花導致看不清文字，把它調低",
@@ -1511,8 +1510,42 @@
                 "decline": "暫不加入",
                 "once_only": "這個提示只問一次。以後想加或想退，隨時可以在 VRChat 個人資料裡操作。",
                 "joined": "已加入群組",
-                "requested": "已送出加入申請，需要管理員通過"
+                "requested": "已送出加入申請，需要管理員通過",
+                "members": "{count} 位成員"
             }
+        },
+        "help": {
+            "title": "這個改版加了什麼",
+            "intro": "這是在原版 VRCX 基礎上加了功能的版本。原版有的東西一個都沒刪，下面是新增的部分。",
+            "features": {
+                "bio_history": {
+                    "title": "玩家簡介歷史",
+                    "description": "好友改個人簡介會被記錄下來，你可以回看他之前寫的是什麼，還能新舊兩版並排對比。"
+                },
+                "footprints": {
+                    "title": "好友足跡",
+                    "description": "圖表頁裡能看某位好友去過哪：最常去的地圖、平時什麼時段在線、以及按天排列的行程時間軸。"
+                },
+                "status_lights": {
+                    "title": "好友狀態燈歷史",
+                    "description": "看好友在四種狀態燈上各花了多少時間，以及精確到分鐘的「什麼時候是什麼燈」。"
+                },
+                "together": {
+                    "title": "好友同遊",
+                    "description": "記錄你不在場時，好友們湊在一起去了哪些地圖——錯過的部分也能補看。同樣在圖表頁裡。"
+                },
+                "wallpaper": {
+                    "title": "自訂壁紙",
+                    "description": "可以把你自己的一張圖鋪在介面後面，亮度、模糊、裁剪都能調。在設定 → 介面裡。"
+                },
+                "group_invite": {
+                    "title": "加群提示",
+                    "description": "這個改版只會問你一次要不要加入背後的群組。加不加都行，問過就不會再問。"
+                }
+            },
+            "reopen_hint": "這個說明只自動彈一次。以後想再看，點側邊欄最上方的說明按鈕。",
+            "close": "知道了",
+            "open": "這個改版加了什麼"
         }
     },
     "dialog": {

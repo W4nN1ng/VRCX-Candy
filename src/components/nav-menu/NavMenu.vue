@@ -1,5 +1,26 @@
 <template>
     <Sidebar side="left" variant="sidebar" collapsible="icon">
+        <!-- Sits at the very top of the sidebar, directly under the window title, so
+             the build name and its help entry point are the first thing in view. -->
+        <SidebarHeader class="px-2 pt-2 pb-0">
+            <div class="flex items-center gap-1 group-data-[collapsible=icon]:justify-center">
+                <span
+                    class="min-w-0 flex-1 truncate pl-1 text-[13px] font-semibold tracking-tight group-data-[collapsible=icon]:hidden">
+                    VRCX-Candy
+                </span>
+                <TooltipWrapper :content="t('view.help.open')">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        class="size-6 shrink-0 text-muted-foreground hover:text-foreground"
+                        :aria-label="t('view.help.open')"
+                        @click="openHelpDialog">
+                        <CircleHelp class="size-3.5" />
+                    </Button>
+                </TooltipWrapper>
+            </div>
+        </SidebarHeader>
+
         <SidebarHeader v-if="showNewDashboardButton" class="px-2 py-2">
             <SidebarMenu>
                 <SidebarMenuItem>
@@ -162,7 +183,7 @@
     import { computed, h, onMounted, ref, watch } from 'vue';
 
     import { storeToRefs } from 'pinia';
-    import { Plus } from 'lucide-vue-next';
+    import { CircleHelp, Plus } from 'lucide-vue-next';
     import { useI18n } from 'vue-i18n';
     import { useRouter } from 'vue-router';
 
@@ -170,7 +191,10 @@
     import { useNavTheme } from './composables/useNavTheme';
     import { useToolActions } from '../../composables/useToolActions';
     import { useToolNavPinning } from '../../composables/useToolNavPinning';
+    import { Button } from '@/components/ui/button';
     import { Kbd } from '@/components/ui/kbd';
+    import { TooltipWrapper } from '@/components/ui/tooltip';
+    import { openHelpDialog } from '@/services/onboardingState';
     import {
         ContextMenu,
         ContextMenuContent,
@@ -283,7 +307,8 @@
 
     const hasNotifications = computed(() => notifiedMenus.value.length > 0);
     const version = computed(() => appVersion.value?.split('VRCX ')?.[1] || '-');
-    const vrcxLogo = new URL('../../../images/VRCX.png', import.meta.url).href;
+    // The mark that goes with the name at the top of this sidebar, not the upstream one.
+    const vrcxLogo = new URL('../../../images/VRCX-Candy.png', import.meta.url).href;
 
     const isEntryNotified = (entry) => checkEntryNotified(entry, notifiedMenus.value);
 
