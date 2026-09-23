@@ -32,6 +32,7 @@ export const panelComponentMap = {
     'charts-instance': defineAsyncComponent(() => import('../../Charts/components/InstanceActivity.vue')),
     'charts-mutual': defineAsyncComponent(() => import('../../Charts/components/MutualFriends.vue')),
     'charts-hot-worlds': defineAsyncComponent(() => import('../../Charts/components/HotWorlds.vue')),
+    'charts-friend-footprints': defineAsyncComponent(() => import('../../Charts/components/FriendFootprints.vue')),
     tools: Tools,
     'widget:feed': defineAsyncComponent(() => import('../widgets/FeedWidget.vue')),
     'widget:game-log': defineAsyncComponent(() => import('../widgets/GameLogWidget.vue')),

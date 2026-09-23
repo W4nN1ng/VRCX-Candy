@@ -10,6 +10,7 @@ const testDefinitions = [
     { key: 'charts-instance', routeName: 'charts-instance' },
     { key: 'charts-mutual', routeName: 'charts-mutual' },
     { key: 'charts-hot-worlds', routeName: 'charts-hot-worlds' },
+    { key: 'charts-friend-footprints', routeName: 'charts-friend-footprints' },
     { key: 'notification', routeName: 'notification' },
     { key: 'direct-access', action: 'direct-access' }
 ];
@@ -248,7 +249,12 @@ describe('sanitizeLayout', () => {
         const result = runSanitize(layout);
         const chartsFolder = result.find((e) => e.type === 'folder' && e.id === 'default-folder-charts');
         expect(chartsFolder).toBeDefined();
-        expect(chartsFolder.items).toEqual(['charts-instance', 'charts-mutual', 'charts-hot-worlds']);
+        expect(chartsFolder.items).toEqual([
+            'charts-instance',
+            'charts-mutual',
+            'charts-hot-worlds',
+            'charts-friend-footprints'
+        ]);
     });
 
     test('auto-appends charts folder when charts keys are neither used nor hidden', () => {

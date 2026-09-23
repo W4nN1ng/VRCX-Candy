@@ -114,6 +114,13 @@ const navDefinitions = [
         routeName: 'charts-hot-worlds'
     },
     {
+        key: 'charts-friend-footprints',
+        icon: 'ri-footprint-line',
+        tooltip: 'view.charts.friend_footprints.tab_label',
+        labelKey: 'view.charts.friend_footprints.tab_label',
+        routeName: 'charts-friend-footprints'
+    },
+    {
         key: 'tools',
         icon: 'ri-tools-line',
         tooltip: 'nav_tooltip.tools',

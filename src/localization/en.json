@@ -659,6 +659,59 @@
                 },
                 "no_friend_data": "No friend visit data",
                 "friend_visits": "{count} visits"
+            },
+            "friend_footprints": {
+                "tab_label": "Friend Footprints",
+                "header": "Friend Footprints",
+                "search_placeholder": "Search friends",
+                "no_candidates": "No friend has recorded locations yet",
+                "candidate_visits": "{count} trips",
+                "empty": "No location recorded for this friend in the selected period",
+                "tips": {
+                    "coverage": "VRCX can only show what it saw while it was running, so this is not the full history since you became friends",
+                    "first_record": "Earliest record: {date}"
+                },
+                "period": {
+                    "days_7": "7 days",
+                    "days_30": "30 days",
+                    "days_90": "90 days",
+                    "all": "All time"
+                },
+                "stats": {
+                    "worlds": "Worlds visited",
+                    "private_rooms": "{count} private rooms",
+                    "visits": "Location changes",
+                    "instance_hops": "{count} instance hops",
+                    "duration": "Time tracked",
+                    "duration_hint": "excludes offline gaps",
+                    "last_seen": "Last seen",
+                    "favourite": "Favourite world",
+                    "active_days": "Active days",
+                    "new_worlds": "{count} brand new worlds"
+                },
+                "unit": {
+                    "times": "{count}x",
+                    "days": "{count} days"
+                },
+                "section": {
+                    "top_worlds": "Most visited",
+                    "heatmap": "When they are around",
+                    "groups": "Groups they play in",
+                    "timeline": "Recent trips"
+                },
+                "heatmap": {
+                    "peak": "Busiest: {day} {hour}:00 ({count} trips)",
+                    "visits": "{count} trips"
+                },
+                "group_none": "Public and personal instances",
+                "kind": {
+                    "private": "Private room",
+                    "hidden": "Hidden room"
+                },
+                "row": {
+                    "ongoing": "still here",
+                    "unknown": "left offline"
+                }
             }
         },
         "tools": {

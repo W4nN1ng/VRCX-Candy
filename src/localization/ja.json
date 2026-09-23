@@ -648,6 +648,59 @@
                 },
                 "no_friend_data": "フレンドの訪問データがありません",
                 "friend_visits": "{count} 回の訪問"
+            },
+            "friend_footprints": {
+                "tab_label": "フレンドの足跡",
+                "header": "フレンドの足跡",
+                "search_placeholder": "フレンドを検索",
+                "no_candidates": "位置が記録されているフレンドがいません",
+                "candidate_visits": "{count} 回",
+                "empty": "選択した期間にこのフレンドの位置は記録されていません",
+                "tips": {
+                    "coverage": "VRCX が起動中に確認できた位置のみ表示されるため、フレンドになってからの全履歴ではありません",
+                    "first_record": "最古の記録: {date}"
+                },
+                "period": {
+                    "days_7": "7日",
+                    "days_30": "30日",
+                    "days_90": "90日",
+                    "all": "全期間"
+                },
+                "stats": {
+                    "worlds": "訪れたワールド",
+                    "private_rooms": "プライベート {count} 回",
+                    "visits": "移動回数",
+                    "instance_hops": "同ワールド内移動 {count} 回",
+                    "duration": "滞在時間",
+                    "duration_hint": "オフライン区間を除く",
+                    "last_seen": "最終確認",
+                    "favourite": "最多のワールド",
+                    "active_days": "活動日数",
+                    "new_worlds": "初登場 {count} ワールド"
+                },
+                "unit": {
+                    "times": "{count} 回",
+                    "days": "{count} 日"
+                },
+                "section": {
+                    "top_worlds": "よく行くワールド",
+                    "heatmap": "活動時間帯",
+                    "groups": "参加グループ",
+                    "timeline": "最近の移動"
+                },
+                "heatmap": {
+                    "peak": "最も活発: {day} {hour}時（{count} 回）",
+                    "visits": "{count} 回"
+                },
+                "group_none": "公開・個人インスタンス",
+                "kind": {
+                    "private": "プライベートルーム",
+                    "hidden": "非公開ルーム"
+                },
+                "row": {
+                    "ongoing": "滞在中",
+                    "unknown": "オフラインで離脱"
+                }
             }
         },
         "tools": {

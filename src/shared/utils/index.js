@@ -11,6 +11,7 @@ export * from './compare';
 export * from './csv';
 export * from './fileUtils';
 export * from './friend';
+export * from './friendFootprints';
 export * from './group';
 export * from './instance';
 export * from './platformUtils';

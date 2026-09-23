@@ -79,6 +79,72 @@ const feed = {
         return bioHistory;
     },
 
+    /**
+     * Loads every recorded location change for one player, oldest first.
+     *
+     * The footprint dashboard does its own aggregation in shared/utils/friendFootprints.js,
+     * so this stays a plain ordered read.
+     *
+     * @param {string} userId - VRChat user id.
+     * @param {string} [createdAfter] - ISO timestamp to start from, empty for everything.
+     * @param {number} maxEntries - Maximum number of rows to return.
+     * @returns {Promise<object[]>} Raw feed_gps rows.
+     */
+    async getGpsRowsForUserId(userId, createdAfter = '', maxEntries = 20000) {
+        const rows = [];
+        let dateFilter = '';
+        const args = { '@user_id': userId, '@limit': maxEntries };
+        if (createdAfter) {
+            dateFilter = 'AND created_at >= @created_after ';
+            args['@created_after'] = createdAfter;
+        }
+        await sqliteService.execute(
+            (dbRow) => {
+                rows.push({
+                    created_at: dbRow[0],
+                    location: dbRow[1] ?? '',
+                    previous_location: dbRow[2] ?? '',
+                    world_name: dbRow[3] ?? '',
+                    group_name: dbRow[4] ?? '',
+                    time: Number(dbRow[5]) || 0
+                });
+            },
+            `SELECT created_at, location, previous_location, world_name, group_name, time FROM ${dbVars.userPrefix}_feed_gps WHERE user_id = @user_id ${dateFilter}ORDER BY created_at ASC, id ASC LIMIT @limit`,
+            args
+        );
+        return rows;
+    },
+
+    /**
+     * Lists players that have recorded location history, most recently seen first.
+     *
+     * @param {string} [createdAfter] - ISO timestamp to start from, empty for everything.
+     * @returns {Promise<object[]>} One entry per player with a visit count.
+     */
+    async getPlayersWithGpsHistory(createdAfter = '') {
+        const players = [];
+        let dateFilter = '';
+        const args = {};
+        if (createdAfter) {
+            dateFilter = 'WHERE created_at >= @created_after ';
+            args['@created_after'] = createdAfter;
+        }
+        await sqliteService.execute(
+            (dbRow) => {
+                players.push({
+                    userId: dbRow[0],
+                    displayName: dbRow[1] ?? '',
+                    visits: Number(dbRow[2]) || 0,
+                    worlds: Number(dbRow[3]) || 0,
+                    lastAt: dbRow[4] ?? ''
+                });
+            },
+            `SELECT user_id, MAX(display_name), COUNT(*), COUNT(DISTINCT world_name), MAX(created_at) FROM ${dbVars.userPrefix}_feed_gps ${dateFilter}GROUP BY user_id ORDER BY MAX(created_at) DESC`,
+            args
+        );
+        return players;
+    },
+
     addAvatarToDatabase(entry) {
         sqliteService.executeNonQuery(
             `INSERT OR IGNORE INTO ${dbVars.userPrefix}_feed_avatar (created_at, user_id, display_name, owner_id, avatar_name, current_avatar_image_url, current_avatar_thumbnail_image_url, previous_current_avatar_image_url, previous_current_avatar_thumbnail_image_url) VALUES (@created_at, @user_id, @display_name, @owner_id, @avatar_name, @current_avatar_image_url, @current_avatar_thumbnail_image_url, @previous_current_avatar_image_url, @previous_current_avatar_thumbnail_image_url)`,

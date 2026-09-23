@@ -288,6 +288,17 @@
                             </div>
                         </TooltipWrapper>
 
+                        <TooltipWrapper side="right" :content="t('view.charts.friend_footprints.tips.coverage')">
+                            <div
+                                class="flex justify-between items-start gap-2 text-xs cursor-pointer hover:text-foreground"
+                                @click="openFootprints()">
+                                <span class="text-muted-foreground shrink-0">{{
+                                    t('view.charts.friend_footprints.header')
+                                }}</span>
+                                <Footprints class="size-3.5 shrink-0 text-muted-foreground" />
+                            </div>
+                        </TooltipWrapper>
+
                         <template v-if="currentUser.id !== userDialog.id">
                             <TooltipWrapper
                                 side="right"
@@ -471,7 +482,7 @@
 </template>
 
 <script setup>
-    import { History, Info, Languages, Pencil, Trash2, User } from 'lucide-vue-next';
+    import { Footprints, History, Info, Languages, Pencil, Trash2, User } from 'lucide-vue-next';
     import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
     import IconFrame from '@/components/IconFrame.vue';
     import { computed, ref, watch } from 'vue';
@@ -480,6 +491,7 @@
     import { storeToRefs } from 'pinia';
     import { toast } from 'vue-sonner';
     import { useI18n } from 'vue-i18n';
+    import { useRouter } from 'vue-router';
 
     import {
         formatDateFilter,
@@ -512,6 +524,7 @@
     import BioHistoryDialog from './BioHistoryDialog.vue';
 
     const { t } = useI18n();
+    const router = useRouter();
 
     const modalStore = useModalStore();
     const instanceStore = useInstanceStore();
@@ -569,6 +582,10 @@
 
     function showEditNoteAndMemoDialog() {
         isEditNoteAndMemoDialogVisible.value = true;
+    }
+
+    function openFootprints() {
+        router.push({ name: 'charts-friend-footprints', query: { user: userDialog.value.id } });
     }
 
     async function translateBio() {

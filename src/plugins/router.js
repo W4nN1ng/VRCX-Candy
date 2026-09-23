@@ -112,6 +112,11 @@ const routes = [
                 name: 'charts-hot-worlds',
                 component: () => import('./../views/Charts/components/HotWorlds.vue')
             },
+            {
+                path: 'charts/friend-footprints',
+                name: 'charts-friend-footprints',
+                component: () => import('./../views/Charts/components/FriendFootprints.vue')
+            },
             { path: 'tools', name: 'tools', component: Tools },
             {
                 path: 'tools/gallery',

@@ -644,6 +644,59 @@
                 },
                 "no_friend_data": "沒有好友造訪資料",
                 "friend_visits": "{count} 次造訪"
+            },
+            "friend_footprints": {
+                "tab_label": "好友足跡",
+                "header": "好友足跡",
+                "search_placeholder": "搜尋好友",
+                "no_candidates": "還沒有好友的位置記錄",
+                "candidate_visits": "{count} 次",
+                "empty": "所选時間範圍內沒有記錄到這位好友的位置",
+                "tips": {
+                    "coverage": "VRCX 只能顯示它執行期間看到的位置，所以這不是你們成為好友以來的完整歷史",
+                    "first_record": "最早記錄：{date}"
+                },
+                "period": {
+                    "days_7": "7 天",
+                    "days_30": "30 天",
+                    "days_90": "90 天",
+                    "all": "全部"
+                },
+                "stats": {
+                    "worlds": "去過的地圖",
+                    "private_rooms": "私人房間 {count} 次",
+                    "visits": "換圖次數",
+                    "instance_hops": "同圖換房 {count} 次",
+                    "duration": "記錄到的停留時長",
+                    "duration_hint": "不含離線間隔",
+                    "last_seen": "最近出現",
+                    "favourite": "最常去",
+                    "active_days": "活躍天數",
+                    "new_worlds": "首次出現的新圖 {count} 張"
+                },
+                "unit": {
+                    "times": "{count} 次",
+                    "days": "{count} 天"
+                },
+                "section": {
+                    "top_worlds": "最常去的地圖",
+                    "heatmap": "什麼時段在玩",
+                    "groups": "常混的社群",
+                    "timeline": "最近行程"
+                },
+                "heatmap": {
+                    "peak": "最活躍：{day} {hour} 點（{count} 次）",
+                    "visits": "{count} 次"
+                },
+                "group_none": "公開與個人房間",
+                "kind": {
+                    "private": "私人房間",
+                    "hidden": "隱藏房間"
+                },
+                "row": {
+                    "ongoing": "還在這裡",
+                    "unknown": "離線時離開"
+                }
             }
         },
         "tools": {

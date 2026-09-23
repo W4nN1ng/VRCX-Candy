@@ -73,6 +73,92 @@ describe('feed.getBioHistoryForUserId', () => {
     });
 });
 
+describe('feed.getGpsRowsForUserId', () => {
+    beforeEach(() => {
+        mocks.execute.mockReset();
+    });
+
+    test('maps rows and keeps the ascending order', async () => {
+        mocks.execute.mockImplementation(async (callback) => {
+            callback(['2026-09-20T00:00:00.000Z', 'wrld_1:inst', 'offline', 'Alpha', '中文游戏社区', 60000]);
+            return undefined;
+        });
+
+        const result = await feed.getGpsRowsForUserId('usr_1');
+
+        expect(result).toEqual([
+            {
+                created_at: '2026-09-20T00:00:00.000Z',
+                location: 'wrld_1:inst',
+                previous_location: 'offline',
+                world_name: 'Alpha',
+                group_name: '中文游戏社区',
+                time: 60000
+            }
+        ]);
+        const sql = mocks.execute.mock.calls[0][1];
+        expect(sql).toContain('usr123_feed_gps');
+        expect(sql).toContain('ORDER BY created_at ASC, id ASC');
+        expect(mocks.execute.mock.calls[0][2]).toMatchObject({ '@user_id': 'usr_1' });
+        expect(sql).not.toContain('AND created_at >=');
+    });
+
+    test('adds the date filter only when a start date is given', async () => {
+        mocks.execute.mockImplementation(async () => undefined);
+
+        await feed.getGpsRowsForUserId('usr_1', '2026-09-01T00:00:00.000Z');
+
+        expect(mocks.execute.mock.calls[0][1]).toContain('AND created_at >= @created_after');
+        expect(mocks.execute.mock.calls[0][2]).toMatchObject({ '@created_after': '2026-09-01T00:00:00.000Z' });
+    });
+
+    test('coerces a null group name to an empty string', async () => {
+        mocks.execute.mockImplementation(async (callback) => {
+            callback(['2026-09-20T00:00:00.000Z', 'private:private', '', null, null, null]);
+            return undefined;
+        });
+
+        const result = await feed.getGpsRowsForUserId('usr_1');
+
+        expect(result[0]).toMatchObject({ world_name: '', group_name: '', time: 0 });
+    });
+});
+
+describe('feed.getPlayersWithGpsHistory', () => {
+    beforeEach(() => {
+        mocks.execute.mockReset();
+    });
+
+    test('returns one entry per player', async () => {
+        mocks.execute.mockImplementation(async (callback) => {
+            callback(['usr_1', 'Tester', 42, 12, '2026-09-20T00:00:00.000Z']);
+            return undefined;
+        });
+
+        const result = await feed.getPlayersWithGpsHistory();
+
+        expect(result).toEqual([
+            {
+                userId: 'usr_1',
+                displayName: 'Tester',
+                visits: 42,
+                worlds: 12,
+                lastAt: '2026-09-20T00:00:00.000Z'
+            }
+        ]);
+        expect(mocks.execute.mock.calls[0][1]).toContain('GROUP BY user_id');
+    });
+
+    test('filters by start date when given', async () => {
+        mocks.execute.mockImplementation(async () => undefined);
+
+        await feed.getPlayersWithGpsHistory('2026-09-01T00:00:00.000Z');
+
+        expect(mocks.execute.mock.calls[0][1]).toContain('WHERE created_at >= @created_after');
+        expect(mocks.execute.mock.calls[0][2]).toMatchObject({ '@created_after': '2026-09-01T00:00:00.000Z' });
+    });
+});
+
 describe('feed.addBioToDatabase', () => {
     beforeEach(() => {
         mocks.executeNonQuery.mockReset();
