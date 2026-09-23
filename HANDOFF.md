@@ -29,7 +29,7 @@
 **分支模型**：`master` = 官方原版一条线不动（rebase 基线）；`my-vrcx` = 所有自定义功能，**一个功能一个 commit**；`vrcx-mod` 分支存维护脚本和文档。部署只从 `my-vrcx`。
 
 > **绝对不要在 GitHub 网页上把任何分支合并进 master**，那会毁掉 rebase 基线。
-> 但**改默认分支是可以的**（Settings → 主设置页 → Default branch，不在 Branches 子页）——`master` 的内容不会动。目前默认分支仍是 `master`，所以别人打开仓库首页看到的是原版代码。
+> 但**改默认分支是可以的**，而且已经改过了：仓库的默认分支**就是 `my-vrcx`**（Settings → 主设置页 → Default branch，不在 Branches 子页）。`master` 的内容一个字节都没动，rebase 基线安全。所以 `git clone` 下来直接就是带全部功能的代码和新文档，不需要再 `checkout`。
 
 ---
 
@@ -173,9 +173,11 @@ powershell -ExecutionPolicy Bypass -File candy\build.ps1
 
 **用户目前没有提出新需求。** 以下是已经跟他确认过、但还没做的可选项，等他决定：
 
-1. **改 GitHub 默认分支**为 `my-vrcx`（现在还是 `master`，所以仓库首页显示的是原版代码）。路径：Settings → **主设置页**（不是 Branches 子页）→ Default branch → 点 `master` 右边的 ⇄ → 选 `my-vrcx` → Update → 再点 `I understand, update the default branch` 确认。**这不是合并，master 内容不动，rebase 基线安全。**
-2. **给 `README.md` 加一段改版说明**。代价：上游偶尔改 README，以后 rebase 可能冲突一次。
+1. **给 `README.md` 加一段改版说明。** 现在仓库首页（默认分支已经是 `my-vrcx`）显示的仍是上游那份 README，写着官方 VRCX 的介绍和徽章，看不出这是个改版。代价：上游偶尔会改 README，以后 rebase 到新版上游时这里可能冲突一次，要手动解。
+2. **改仓库 About 简介 + Topics**（网页操作，用户自己做）。建议写成「VRCX 的改版：好友足迹 / 状态灯历史 / 同游记录 / 自定义壁纸」。
 3. **`VRCX_group_invite_seen`（旧键）清理**：旧键还留在用户配置里，没人读它，可以不管。
+
+已经做完、不用再做的：仓库改公开 ✅、默认分支改 `my-vrcx` ✅、发布 Release（tag `v2026.09.16-candy1`，附件齐全）✅。
 
 ### 加新图表页要在 7 个文件里注册
 
