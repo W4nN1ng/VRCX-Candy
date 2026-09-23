@@ -50,6 +50,9 @@ const feed = {
     /**
      * Loads the recorded bio changes of a single user, oldest change first.
      *
+     * Changes involving an empty bio are left out: friend list refreshes intermittently
+     * report an empty bio, which older VRCX versions stored as a real change.
+     *
      * @param {string} userId - VRChat user id.
      * @param {number} maxEntries - Maximum number of changes to return.
      * @returns {Promise<object[]>} Bio change entries with bio and previousBio.
@@ -67,7 +70,7 @@ const feed = {
                     previousBio: dbRow[5] ?? ''
                 });
             },
-            `SELECT id, created_at, user_id, display_name, bio, previous_bio FROM ${dbVars.userPrefix}_feed_bio WHERE user_id = @user_id ORDER BY created_at ASC, id ASC LIMIT @limit`,
+            `SELECT id, created_at, user_id, display_name, bio, previous_bio FROM ${dbVars.userPrefix}_feed_bio WHERE user_id = @user_id AND bio != '' AND previous_bio != '' ORDER BY created_at ASC, id ASC LIMIT @limit`,
             {
                 '@user_id': userId,
                 '@limit': maxEntries

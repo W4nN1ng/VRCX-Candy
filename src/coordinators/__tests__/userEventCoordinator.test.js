@@ -91,24 +91,16 @@ describe('runHandleUserUpdateFlow bio changes', () => {
         });
     });
 
-    test('records a bio that was set for the first time', async () => {
+    test('ignores a bio that was set from an empty one', async () => {
         await runHandleUserUpdateFlow(bioRef(), { bio: ['你好', ''] }, { now, nowIso });
 
-        expect(addBioToDatabase).toHaveBeenCalledTimes(1);
-        expect(addBioToDatabase.mock.calls[0][0]).toMatchObject({
-            bio: '你好',
-            previousBio: ''
-        });
+        expect(addBioToDatabase).not.toHaveBeenCalled();
     });
 
-    test('records a bio that was cleared', async () => {
+    test('ignores a bio that looks cleared, the api reports empty bios on refresh', async () => {
         await runHandleUserUpdateFlow(bioRef(), { bio: ['', '你好'] }, { now, nowIso });
 
-        expect(addBioToDatabase).toHaveBeenCalledTimes(1);
-        expect(addBioToDatabase.mock.calls[0][0]).toMatchObject({
-            bio: '',
-            previousBio: '你好'
-        });
+        expect(addBioToDatabase).not.toHaveBeenCalled();
     });
 
     test('ignores an unchanged bio', async () => {

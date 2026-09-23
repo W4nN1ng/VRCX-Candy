@@ -47,6 +47,8 @@ describe('feed.getBioHistoryForUserId', () => {
         ]);
         expect(mocks.execute.mock.calls[0][1]).toContain('usr123_feed_bio');
         expect(mocks.execute.mock.calls[0][1]).toContain('WHERE user_id = @user_id');
+        expect(mocks.execute.mock.calls[0][1]).toContain("AND bio != ''");
+        expect(mocks.execute.mock.calls[0][1]).toContain("AND previous_bio != ''");
         expect(mocks.execute.mock.calls[0][1]).toContain('ORDER BY created_at ASC, id ASC');
         expect(mocks.execute.mock.calls[0][2]).toMatchObject({ '@user_id': 'usr_1' });
     });

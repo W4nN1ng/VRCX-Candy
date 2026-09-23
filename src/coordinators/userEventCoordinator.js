@@ -230,11 +230,12 @@ export async function runHandleUserUpdateFlow(ref, props, { now = Date.now, nowI
         feedStore.addFeedEntry(feed);
         database.addStatusToDatabase(feed);
     }
-    // props.bio is a [new, previous] tuple and only present when the two differ,
-    // so an empty side is a real change (bio set for the first time / bio cleared)
-    if (props.bio && props.bio[0] !== props.bio[1]) {
-        const bio = String(props.bio[0] ?? '');
-        const previousBio = String(props.bio[1] ?? '');
+    // Both sides must be non empty. The API intermittently returns users with an
+    // empty bio during friend list refreshes, which would otherwise be recorded as
+    // dozens of friends "clearing" their bio within a few seconds.
+    if (props.bio && props.bio[0] && props.bio[1] && props.bio[0] !== props.bio[1]) {
+        const bio = String(props.bio[0]);
+        const previousBio = String(props.bio[1]);
         feed = {
             created_at: nowIso(),
             type: 'Bio',
