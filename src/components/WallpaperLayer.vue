@@ -74,6 +74,7 @@
      * @param {number} height
      */
     function refuseWallpaper(reason, width, height) {
+        console.log(`wallpaper refused: ${reason} (${width}x${height})`);
         appearanceSettingsStore.setWallpaperValue('enabled', false);
         const message =
             reason === 'too_many_pixels'
