@@ -1,7 +1,7 @@
 From f4e7c485ccdfe10cc9946add7b20aedd29a8cad3 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?=E6=99=9A=E5=87=9DW4nN1ng?= <wn2276519232@gmail.com>
 Date: Wed, 23 Sep 2026 14:47:19 +0800
-Subject: [PATCH 3/3] Add a friend footprint dashboard
+Subject: [PATCH 3/6] Add a friend footprint dashboard
 
 Picking a friend from the new Charts tab now answers where they have been,
 how often, and when. It aggregates the feed_gps rows VRCX already records

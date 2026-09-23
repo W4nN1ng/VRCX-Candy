@@ -1,0 +1,91 @@
+From 71949010e22f2e1b10004f23573d1b8d89e15bf7 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=E6=99=9A=E5=87=9DW4nN1ng?= <wn2276519232@gmail.com>
+Date: Wed, 23 Sep 2026 17:27:22 +0800
+Subject: [PATCH 6/6] Point the handoff notes at the next task
+
+The status light dashboard is done, so section 5 no longer describes work
+that is still pending. It now records what was actually decided about the
+percentages, since that decision is easy to overturn by accident and the
+numbers stop meaning what they say if it is.
+
+The data section carries the two feed_status traps that cost real analysis
+time this round: description-only rows that look like duplicates but are
+one fifth of the real events, and the previous_status back-fill that is
+only trustworthy inside a single session. Both are the kind of thing that
+would otherwise be rediscovered the hard way.
+
+Section 6 gains the lesson behind both - query the real database before
+trusting a design assumption - and the note that a new chart page has to be
+registered in seven files.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+---
+ HANDOFF.md | 32 ++++++++++++++++++++++----------
+ 1 file changed, 22 insertions(+), 10 deletions(-)
+
+diff --git a/HANDOFF.md b/HANDOFF.md
+index bb251fc4..67b43e16 100644
+--- a/HANDOFF.md
++++ b/HANDOFF.md
+@@ -20,6 +20,7 @@
+ 1. `53a45002` 玩家简介历史：资料页简介卡片下显示上一条简介 + `BioHistoryDialog` 完整历史（逐词红绿 diff / 全文两种看法）。数据源 `feed_bio` 表。
+ 2. `e5a9a76a` 空简介噪声过滤：VRChat 接口刷新好友列表时偶发返回空 bio，库里 176 条有 81 条是这种假"清空"，读取时过滤掉。
+ 3. `f4e7c485` 好友足迹仪表盘：图表菜单新增"好友足迹"页，左栏选好友，右栏看概览卡 / Top 世界 / 周×24 时段热力 / 社群分布 / 按日分组时间线。数据源 `feed_gps` 表，聚合逻辑在 `src/shared/utils/friendFootprints.js`（纯函数，有 25 个单测）。
++4. `23b9945e` 好友状态灯：图表菜单新增"好友状态灯"页，左栏选好友，右栏看概览卡 / 四灯占比 / 按天分组精确到分钟的时间线 / 24 小时灯分布 / 文案改动记录。数据源 `feed_status` + `feed_online_offline`，聚合逻辑在 `src/shared/utils/friendStatusLights.js`（纯函数，有 30 个单测）。资料页也并排加了入口。**动手前务必读第 4 节的 `feed_status` 两条**——这个功能有两个"按直觉写就会算错"的坑。
+ 
+ 约定：逻辑层（纯函数、DB 查询）有单测；**视图组件没有单测**（仓库里 HotWorlds/InstanceActivity/MutualFriends 等图表页也都没有，这是仓库惯例，不是遗漏）。
+ 
+@@ -38,29 +39,40 @@
+ 表前缀 = userId 去掉 `-` 和 `_`，例如 `usr292d12f57f2949a3b4da853ce0183d3c_feed_gps`。
+ 
+ - `feed_gps`：每行是一次换位置事件。`time` 列是"距上次位置变更的毫秒数"，**同图换房时会重置**，所以只是下限；算停留时长要用相邻两行的时间差，间隔超过 12 小时视为 VRCX 没在跑、丢弃不计。
+-- `feed_status`：`status` / `previous_status` + `status_description` / `previous_status_description`。状态值四种：`active`（绿 #2ed319）、`join me`（蓝 #00b8ff）、`ask me`（黄 #e97c03）、`busy`（红 #c80928）。颜色变量在 `src/styles/globals.css` 的 `--status-online/joinme/askme/busy`，class 映射在 `src/shared/utils/user.js` 的 `statusClass()`。
++- `feed_status`：`status` / `previous_status` + `status_description` / `previous_status_description`。状态值四种：`active`（绿 #2ed319）、`join me`（蓝 #00b8ff）、`ask me`（黄 #e97c03）、`busy`（红 #c80928）。颜色变量在 `src/styles/globals.css` 的 `--status-online/joinme/askme/busy`，class 映射在 `src/shared/utils/user.js` 的 `statusClass()`。两个坑：
++  - **`status == previous_status` 的行不是重复，别当噪声过滤掉。** 实测 796 条里 169 条是"灯没变、但灯上挂的自定义文案变了"（VRChat 允许给灯配一句话）；两边都真的没变的行数是 **0**。按直觉写会静默丢掉 21% 的真实事件。这类行应单独当"文案改动"展示，且**不能中断当前灯的区间**。
++  - 只有**换灯**时才产生行，一直不换灯就没有记录。所以"某段时间挂的什么灯"必然存在未知区段，这是数据源边界，不是 bug；界面上要如实标注，别硬推。
++  - `previous_status` 描述的是**本条之前那段**的时间，且能一直回溯到本次在线会话的开头（因为下线的转换被 `userEventCoordinator.js` 的过滤条件挡掉了）。所以"会话里第一条变化"的 `previous_status` 是唯一可以安全回填的推断；实测 62 个样本里 98% 正确。**别做跨会话的灯延续推算**——实测两次观测间隔 <1 小时时灯只有 8% 相同（那正是"人在线并且刚换了灯"），间隔 ≥1 小时才 90% 相同。
+ - `feed_bio`：`bio` / `previous_bio`，约 46% 是接口噪声（见上）。
+ - `friend_log_history`：`type` 为 `DisplayName` / `TrustLevel`，带 previous 值。
+-- `feed_online_offline`：上下线事件。
++- `feed_online_offline`：上下线事件。**会重复写**（实测 205 组相邻同类型行），且**滞后于状态变化**（796 条状态变化里有 121 条落在"它以为离线"的窗口内）。结论：状态变化本身就是"人在线"的证据，建模时要用它反过来开在线窗口，并且要合并相邻同状态的区间。
+ - **共同前提**：所有表只记录 VRCX 运行期间、且只记录好友。任何"完整历史"的说法都不成立，界面上要如实标注。
+ 
+-## 5. 下一个任务（用户已提出，尚未开始）
++## 5. 下一个任务
+ 
+-**好友状态灯统计**，精确到个人。用户原话的三点：
++**目前没有已提出的新需求，等用户说。** 上一轮的需求（好友状态灯统计）已在 `23b9945e` 完成，见第 2 节第 4 条，不要重做。
+ 
+-1. 统计某个好友四种灯的使用占比（蓝/绿/黄/红各占百分之几），要可视化。
+-2. 记录"什么时候是什么灯"，精确到分钟（例：12 月 6 日 6 点是蓝灯，13 点切黄灯，21 点回蓝灯），要可视化。
+-3. 在这两点之上自由加相关功能，让用户更直观地看到好友状态变化。
++下面留的是那一轮的需求原文和当时定下的口径，读一下有助于理解用户的偏好和踩过的坑：
+ 
+-数据源就是 `feed_status`（当前库里 796 条，四种状态都有）+ `feed_online_offline`（用来区分"离线"这个第五种状态，否则占比会把离线时间漏掉或错算）。
++> 1. 统计某个好友四种灯的使用占比（蓝/绿/黄/红各占百分之几），要可视化。
++> 2. 记录"什么时候是什么灯"，精确到分钟（例：12 月 6 日 6 点是蓝灯，13 点切黄灯，21 点回蓝灯），要可视化。
++> 3. 在这两点之上自由加相关功能，让用户更直观地看到好友状态变化。
+ 
+-建议沿用足迹那套已验证的模式：`src/shared/utils/` 下写纯函数聚合层（带单测）→ `src/services/database/feed.js` 加按 userId 的查询 → `src/views/Charts/components/` 加页面 → 注册路由/导航（注意 `navMenuUtils.js` 的 `chartsKeys` 有 `every(key => definitionMap.has(key))` 的门槛，测试 fixture 也要同步加）→ 本地化用脚本插 14 个语言文件（zh-CN/zh-TW/ja 翻译，其余落英文）。
++**最后定下的口径**（用户认可、界面上有写明，改这个功能时别推翻）：
+ 
+-占比的口径要先想清楚：是"在线期间四灯的时间占比"还是"含离线的全部时间占比"。建议前者为主、后者作为对照，并在界面上写明，否则数字会被误读。
++- 主百分比**只统计"确实记录到灯"的时间**；「在线但未知 / 离线 / 无记录」三项单独列出，不掺进分母，免得数字被猜测稀释。
++- 另给一个**默认关闭**的「推算」开关，打开才把会话开头那段回填计入，图例标 `≈` 并注明是估计值。
++- 区间重建时，**夹在两个真实事件之间的区间无论多长都采信**（灯不变本来就不产生行）；**只有从最后一个事件到"现在"的那段**在超过 12 小时时才丢弃——那一段没有第二个见证者。
++
++加新功能时沿用足迹那套已验证的模式：`src/shared/utils/` 下写纯函数聚合层（带单测）→ `src/services/database/feed.js` 加按 userId 的查询 → `src/views/Charts/components/` 加页面 → 注册路由/导航 → 本地化用脚本插 14 个语言文件（zh-CN/zh-TW/ja 翻译，其余落英文）。
++
++**新图表页要在 7 个文件里注册，漏一个就出问题**（用 `grep -rn "charts-hot-worlds" src/` 逐条对，这是最省事的办法）：`plugins/router.js`、`shared/constants/ui.js`、`nav-menu/navLayoutDefaults.js`、`nav-menu/navMenuUtils.js` 的 `chartsKeys`（有 `every(key => definitionMap.has(key))` 的门槛，漏了**整个 charts 文件夹都不显示**）、`shared/constants/dashboard.js`、`stores/settings/appearance.js`、`Dashboard/components/panelRegistry.js`，外加 `nav-menu/__tests__/navMenuUtils.test.js` 里的 fixture 和期望数组。
+ 
+ ## 6. 干活的习惯
+ 
+ - 一个功能一个 commit，message 写"为什么"而不是"改了哪个文件"。
++- **动手写代码之前，先拿真实数据库验一遍你的假设。** 好友状态灯那一轮，我原本的两个核心假设（"灯没变就是重复行"、"没记录的时间可以按上一个灯推算"）**都是错的**，是查了库才发现：前者会丢掉 21% 的真实事件，后者在短间隔下只有 8% 命中。查库很便宜——`node -e` 里 `require('node:sqlite')` 以 `readOnly: true` 打开 `C:\Users\28041\AppData\Roaming\VRCX\VRCX.sqlite3` 就能查，机器上没装 sqlite3 命令行但 Node 24 自带这个模块。**只读，永远别写它。**
++- 设计里凡是"猜"出来的部分，在界面上标出来并给开关，别让用户以为那是观测值。
+ - 改完按第 3 节那四步验证，再 `vrcx-sync.cmd` 部署、`vrcx-push.cmd` 推 GitHub。
+ - 部署前确认 VRCX 已关；部署后看 `AppData\Roaming\VRCX\logs\` 最新日志有没有 JS 报错。
+ - 用户看不懂技术细节时，用生活化类比解释（账本/书签/存档点这类），并且主动说明"哪些做不到、为什么"。
+-- 
+2.55.0.windows.3
+

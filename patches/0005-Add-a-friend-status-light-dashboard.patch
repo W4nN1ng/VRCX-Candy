@@ -1,0 +1,3457 @@
+From 23b9945ef8d39bbf1bebf80a9d3dc1a7e2aaba0f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=E6=99=9A=E5=87=9DW4nN1ng?= <wn2276519232@gmail.com>
+Date: Wed, 23 Sep 2026 17:24:26 +0800
+Subject: [PATCH 5/6] Add a friend status light dashboard
+
+Picking a friend from the new Charts tab now shows how their four status
+lights divide up over time and when each one was on, down to the minute.
+
+Reading a real database turned up two things that would have made the
+numbers wrong. First, a feed_status row whose status equals previous_status
+is not a duplicate: 169 of 796 rows record an edit to the custom text
+attached to a light, so discarding them as noise would have silently
+dropped a fifth of the real events. They are kept and reported as text
+edits, and they deliberately do not cut the current light's interval short.
+Second, carrying a light forward across an unobserved stretch does not work:
+when two observations are under an hour apart the light differs 92% of the
+time, so those stretches stay unknown and only the single case with a
+recorded previous_status is filled in, flagged as an estimate.
+
+The percentages cover only time a light was actually recorded; offline,
+online-without-a-record and VRCX-not-running are listed separately so the
+shares are never diluted by guesswork. Offline events repeat themselves and
+lag behind status changes, so a status change is treated as proof of being
+online, and neighbouring intervals in the same state are merged.
+
+feed_status also gains the (user_id, created_at) index the other feed
+tables already had.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+---
+ .../dialogs/UserDialog/UserDialogInfoTab.vue  |  17 +-
+ .../nav-menu/__tests__/navMenuUtils.test.js   |   4 +-
+ src/components/nav-menu/navLayoutDefaults.js  |   8 +-
+ src/components/nav-menu/navMenuUtils.js       |   8 +-
+ src/localization/cs.json                      |  72 ++
+ src/localization/en.json                      |  70 ++
+ src/localization/es.json                      |  70 ++
+ src/localization/fr.json                      |  70 ++
+ src/localization/hu.json                      |  70 ++
+ src/localization/ja.json                      |  70 ++
+ src/localization/ko.json                      |  72 ++
+ src/localization/pl.json                      |  70 ++
+ src/localization/pt.json                      |  70 ++
+ src/localization/ru.json                      |  70 ++
+ src/localization/th.json                      |  70 ++
+ src/localization/vi.json                      |  72 ++
+ src/localization/zh-CN.json                   |  70 ++
+ src/localization/zh-TW.json                   |  70 ++
+ src/plugins/router.js                         |   5 +
+ src/services/database/__tests__/feed.test.js  | 124 +++
+ src/services/database/feed.js                 |  98 +++
+ src/services/database/index.js                |   3 +
+ src/shared/constants/dashboard.js             |   1 +
+ src/shared/constants/ui.js                    |   7 +
+ .../__tests__/friendStatusLights.test.js      | 458 ++++++++++
+ src/shared/utils/friendStatusLights.js        | 533 ++++++++++++
+ src/shared/utils/index.js                     |   1 +
+ src/stores/settings/appearance.js             |   3 +-
+ .../Charts/components/FriendStatusLights.vue  | 797 ++++++++++++++++++
+ .../Dashboard/components/panelRegistry.js     |   1 +
+ 30 files changed, 3049 insertions(+), 5 deletions(-)
+ create mode 100644 src/shared/utils/__tests__/friendStatusLights.test.js
+ create mode 100644 src/shared/utils/friendStatusLights.js
+ create mode 100644 src/views/Charts/components/FriendStatusLights.vue
+
+diff --git a/src/components/dialogs/UserDialog/UserDialogInfoTab.vue b/src/components/dialogs/UserDialog/UserDialogInfoTab.vue
+index 746e90a7..7f78a254 100644
+--- a/src/components/dialogs/UserDialog/UserDialogInfoTab.vue
++++ b/src/components/dialogs/UserDialog/UserDialogInfoTab.vue
+@@ -299,6 +299,17 @@
+                             </div>
+                         </TooltipWrapper>
+ 
++                        <TooltipWrapper side="right" :content="t('view.charts.friend_status_lights.tips.coverage')">
++                            <div
++                                class="flex justify-between items-start gap-2 text-xs cursor-pointer hover:text-foreground"
++                                @click="openStatusLights()">
++                                <span class="text-muted-foreground shrink-0">{{
++                                    t('view.charts.friend_status_lights.header')
++                                }}</span>
++                                <Lightbulb class="size-3.5 shrink-0 text-muted-foreground" />
++                            </div>
++                        </TooltipWrapper>
++
+                         <template v-if="currentUser.id !== userDialog.id">
+                             <TooltipWrapper
+                                 side="right"
+@@ -482,7 +493,7 @@
+ </template>
+ 
+ <script setup>
+-    import { Footprints, History, Info, Languages, Pencil, Trash2, User } from 'lucide-vue-next';
++    import { Footprints, History, Info, Languages, Lightbulb, Pencil, Trash2, User } from 'lucide-vue-next';
+     import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+     import IconFrame from '@/components/IconFrame.vue';
+     import { computed, ref, watch } from 'vue';
+@@ -588,6 +599,10 @@
+         router.push({ name: 'charts-friend-footprints', query: { user: userDialog.value.id } });
+     }
+ 
++    function openStatusLights() {
++        router.push({ name: 'charts-friend-status-lights', query: { user: userDialog.value.id } });
++    }
++
+     async function translateBio() {
+         if (translateLoading.value) {
+             return;
+diff --git a/src/components/nav-menu/__tests__/navMenuUtils.test.js b/src/components/nav-menu/__tests__/navMenuUtils.test.js
+index a2e95fc5..4d23f9c7 100644
+--- a/src/components/nav-menu/__tests__/navMenuUtils.test.js
++++ b/src/components/nav-menu/__tests__/navMenuUtils.test.js
+@@ -11,6 +11,7 @@ const testDefinitions = [
+     { key: 'charts-mutual', routeName: 'charts-mutual' },
+     { key: 'charts-hot-worlds', routeName: 'charts-hot-worlds' },
+     { key: 'charts-friend-footprints', routeName: 'charts-friend-footprints' },
++    { key: 'charts-friend-status-lights', routeName: 'charts-friend-status-lights' },
+     { key: 'notification', routeName: 'notification' },
+     { key: 'direct-access', action: 'direct-access' }
+ ];
+@@ -253,7 +254,8 @@ describe('sanitizeLayout', () => {
+             'charts-instance',
+             'charts-mutual',
+             'charts-hot-worlds',
+-            'charts-friend-footprints'
++            'charts-friend-footprints',
++            'charts-friend-status-lights'
+         ]);
+     });
+ 
+diff --git a/src/components/nav-menu/navLayoutDefaults.js b/src/components/nav-menu/navLayoutDefaults.js
+index 808f5eca..0f95486d 100644
+--- a/src/components/nav-menu/navLayoutDefaults.js
++++ b/src/components/nav-menu/navLayoutDefaults.js
+@@ -31,7 +31,13 @@ export function createBaseDefaultNavLayout(t) {
+             nameKey: 'nav_tooltip.charts',
+             name: t('nav_tooltip.charts'),
+             icon: 'ri-pie-chart-line',
+-            items: ['charts-instance', 'charts-mutual', 'charts-hot-worlds', 'charts-friend-footprints']
++            items: [
++                'charts-instance',
++                'charts-mutual',
++                'charts-hot-worlds',
++                'charts-friend-footprints',
++                'charts-friend-status-lights'
++            ]
+         },
+         { type: 'item', key: 'tools' },
+         { type: 'item', key: 'direct-access' }
+diff --git a/src/components/nav-menu/navMenuUtils.js b/src/components/nav-menu/navMenuUtils.js
+index bb8cfd97..2014f664 100644
+--- a/src/components/nav-menu/navMenuUtils.js
++++ b/src/components/nav-menu/navMenuUtils.js
+@@ -39,7 +39,13 @@ export function sanitizeLayout(layout, hiddenKeys, definitionMap, allDefinitions
+     const normalizedHiddenKeys = normalizeHiddenKeys(hiddenKeys, definitionMap);
+     const hiddenSet = new Set(normalizedHiddenKeys);
+     const normalized = [];
+-    const chartsKeys = ['charts-instance', 'charts-mutual', 'charts-hot-worlds', 'charts-friend-footprints'];
++    const chartsKeys = [
++        'charts-instance',
++        'charts-mutual',
++        'charts-hot-worlds',
++        'charts-friend-footprints',
++        'charts-friend-status-lights'
++    ];
+ 
+     const appendItemEntry = (key, target = normalized) => {
+         if (!key || usedKeys.has(key) || !definitionMap.has(key)) {
+diff --git a/src/localization/cs.json b/src/localization/cs.json
+index 5cf9cb8e..3d6db41e 100644
+--- a/src/localization/cs.json
++++ b/src/localization/cs.json
+@@ -501,6 +501,78 @@
+                     }
+                 }
+             }
++        },
++        "charts": {
++            "friend_status_lights": {
++                "tab_label": "Status Lights",
++                "header": "Friend Status Lights",
++                "search_placeholder": "Search friends",
++                "no_candidates": "No friend has a status light record yet",
++                "candidate_changes": "{count} changes",
++                "empty": "No status light was recorded for this friend in the selected range",
++                "toggle": {
++                    "inferred": "Estimate unrecorded time"
++                },
++                "tips": {
++                    "coverage": "VRCX can only show the status lights it saw while running, and only for friends, so this is not the full history",
++                    "shares": "The percentages cover only the time a light was actually recorded. Time that was never recorded is listed separately below and left out of the percentages, so the numbers are not diluted by guesswork",
++                    "inferred": "Counts the unrecorded stretch before each light change as the light that came before it. Measured against this database that estimate matches the next recorded light about 90% of the time, so treat the result as an estimate",
++                    "buckets": "Online with an unknown light: the player was online but no light change was ever recorded. Offline: VRCX saw them log off. Unrecorded: VRCX was not running, so nothing is known about that stretch"
++                },
++                "period": {
++                    "days_7": "7 days",
++                    "days_30": "30 days",
++                    "days_90": "90 days",
++                    "all": "All"
++                },
++                "light": {
++                    "online": "Online",
++                    "joinme": "Join Me",
++                    "askme": "Ask Me",
++                    "busy": "Do Not Disturb"
++                },
++                "stats": {
++                    "recorded": "Time with a light",
++                    "since": "since {date}",
++                    "days": "Days seen",
++                    "last_change": "last change {time}",
++                    "most_used": "Most used",
++                    "most_used_hint": "{percent}% of recorded time",
++                    "switches": "Light changes",
++                    "longest_hint": "longest {light} {duration}"
++                },
++                "section": {
++                    "shares": "How the four lights divide up",
++                    "timeline": "When each light was on",
++                    "hours": "Which light at which hour",
++                    "descriptions": "Custom text edits"
++                },
++                "bucket": {
++                    "unknown_online": "Online, light unknown",
++                    "offline": "Offline",
++                    "unrecorded": "Unrecorded"
++                },
++                "row": {
++                    "average": "avg {duration}"
++                },
++                "state": {
++                    "offline": "Offline",
++                    "unknown": "Unknown",
++                    "inferred": "estimated"
++                },
++                "timeline": {
++                    "recorded": "{duration} with a light",
++                    "no_change": "No light was recorded that day"
++                },
++                "hours": {
++                    "peak": "busiest {hour}:00 - {duration}",
++                    "hour": "{hour}:00"
++                },
++                "descriptions": {
++                    "hint": "VRCX also records edits to the custom text attached to a light. Those change the text without changing the light, so they never appear in the timeline above",
++                    "empty": "No custom text was edited in the selected range"
++                }
++            }
+         }
+     },
+     "dialog": {
+diff --git a/src/localization/en.json b/src/localization/en.json
+index 331a10b4..383b5203 100644
+--- a/src/localization/en.json
++++ b/src/localization/en.json
+@@ -712,6 +712,76 @@
+                     "ongoing": "still here",
+                     "unknown": "left offline"
+                 }
++            },
++            "friend_status_lights": {
++                "tab_label": "Status Lights",
++                "header": "Friend Status Lights",
++                "search_placeholder": "Search friends",
++                "no_candidates": "No friend has a status light record yet",
++                "candidate_changes": "{count} changes",
++                "empty": "No status light was recorded for this friend in the selected range",
++                "toggle": {
++                    "inferred": "Estimate unrecorded time"
++                },
++                "tips": {
++                    "coverage": "VRCX can only show the status lights it saw while running, and only for friends, so this is not the full history",
++                    "shares": "The percentages cover only the time a light was actually recorded. Time that was never recorded is listed separately below and left out of the percentages, so the numbers are not diluted by guesswork",
++                    "inferred": "Counts the unrecorded stretch before each light change as the light that came before it. Measured against this database that estimate matches the next recorded light about 90% of the time, so treat the result as an estimate",
++                    "buckets": "Online with an unknown light: the player was online but no light change was ever recorded. Offline: VRCX saw them log off. Unrecorded: VRCX was not running, so nothing is known about that stretch"
++                },
++                "period": {
++                    "days_7": "7 days",
++                    "days_30": "30 days",
++                    "days_90": "90 days",
++                    "all": "All"
++                },
++                "light": {
++                    "online": "Online",
++                    "joinme": "Join Me",
++                    "askme": "Ask Me",
++                    "busy": "Do Not Disturb"
++                },
++                "stats": {
++                    "recorded": "Time with a light",
++                    "since": "since {date}",
++                    "days": "Days seen",
++                    "last_change": "last change {time}",
++                    "most_used": "Most used",
++                    "most_used_hint": "{percent}% of recorded time",
++                    "switches": "Light changes",
++                    "longest_hint": "longest {light} {duration}"
++                },
++                "section": {
++                    "shares": "How the four lights divide up",
++                    "timeline": "When each light was on",
++                    "hours": "Which light at which hour",
++                    "descriptions": "Custom text edits"
++                },
++                "bucket": {
++                    "unknown_online": "Online, light unknown",
++                    "offline": "Offline",
++                    "unrecorded": "Unrecorded"
++                },
++                "row": {
++                    "average": "avg {duration}"
++                },
++                "state": {
++                    "offline": "Offline",
++                    "unknown": "Unknown",
++                    "inferred": "estimated"
++                },
++                "timeline": {
++                    "recorded": "{duration} with a light",
++                    "no_change": "No light was recorded that day"
++                },
++                "hours": {
++                    "peak": "busiest {hour}:00 - {duration}",
++                    "hour": "{hour}:00"
++                },
++                "descriptions": {
++                    "hint": "VRCX also records edits to the custom text attached to a light. Those change the text without changing the light, so they never appear in the timeline above",
++                    "empty": "No custom text was edited in the selected range"
++                }
+             }
+         },
+         "tools": {
+diff --git a/src/localization/es.json b/src/localization/es.json
+index 027bfcff..e132ebc6 100644
+--- a/src/localization/es.json
++++ b/src/localization/es.json
+@@ -293,6 +293,76 @@
+                     "ongoing": "still here",
+                     "unknown": "left offline"
+                 }
++            },
++            "friend_status_lights": {
++                "tab_label": "Status Lights",
++                "header": "Friend Status Lights",
++                "search_placeholder": "Search friends",
++                "no_candidates": "No friend has a status light record yet",
++                "candidate_changes": "{count} changes",
++                "empty": "No status light was recorded for this friend in the selected range",
++                "toggle": {
++                    "inferred": "Estimate unrecorded time"
++                },
++                "tips": {
++                    "coverage": "VRCX can only show the status lights it saw while running, and only for friends, so this is not the full history",
++                    "shares": "The percentages cover only the time a light was actually recorded. Time that was never recorded is listed separately below and left out of the percentages, so the numbers are not diluted by guesswork",
++                    "inferred": "Counts the unrecorded stretch before each light change as the light that came before it. Measured against this database that estimate matches the next recorded light about 90% of the time, so treat the result as an estimate",
++                    "buckets": "Online with an unknown light: the player was online but no light change was ever recorded. Offline: VRCX saw them log off. Unrecorded: VRCX was not running, so nothing is known about that stretch"
++                },
++                "period": {
++                    "days_7": "7 days",
++                    "days_30": "30 days",
++                    "days_90": "90 days",
++                    "all": "All"
++                },
++                "light": {
++                    "online": "Online",
++                    "joinme": "Join Me",
++                    "askme": "Ask Me",
++                    "busy": "Do Not Disturb"
++                },
++                "stats": {
++                    "recorded": "Time with a light",
++                    "since": "since {date}",
++                    "days": "Days seen",
++                    "last_change": "last change {time}",
++                    "most_used": "Most used",
++                    "most_used_hint": "{percent}% of recorded time",
++                    "switches": "Light changes",
++                    "longest_hint": "longest {light} {duration}"
++                },
++                "section": {
++                    "shares": "How the four lights divide up",
++                    "timeline": "When each light was on",
++                    "hours": "Which light at which hour",
++                    "descriptions": "Custom text edits"
++                },
++                "bucket": {
++                    "unknown_online": "Online, light unknown",
++                    "offline": "Offline",
++                    "unrecorded": "Unrecorded"
++                },
++                "row": {
++                    "average": "avg {duration}"
++                },
++                "state": {
++                    "offline": "Offline",
++                    "unknown": "Unknown",
++                    "inferred": "estimated"
++                },
++                "timeline": {
++                    "recorded": "{duration} with a light",
++                    "no_change": "No light was recorded that day"
++                },
++                "hours": {
++                    "peak": "busiest {hour}:00 - {duration}",
++                    "hour": "{hour}:00"
++                },
++                "descriptions": {
++                    "hint": "VRCX also records edits to the custom text attached to a light. Those change the text without changing the light, so they never appear in the timeline above",
++                    "empty": "No custom text was edited in the selected range"
++                }
+             }
+         },
+         "tools": {
+diff --git a/src/localization/fr.json b/src/localization/fr.json
+index 4a861bc3..b8ed7f87 100644
+--- a/src/localization/fr.json
++++ b/src/localization/fr.json
+@@ -438,6 +438,76 @@
+                     "ongoing": "still here",
+                     "unknown": "left offline"
+                 }
++            },
++            "friend_status_lights": {
++                "tab_label": "Status Lights",
++                "header": "Friend Status Lights",
++                "search_placeholder": "Search friends",
++                "no_candidates": "No friend has a status light record yet",
++                "candidate_changes": "{count} changes",
++                "empty": "No status light was recorded for this friend in the selected range",
++                "toggle": {
++                    "inferred": "Estimate unrecorded time"
++                },
++                "tips": {
++                    "coverage": "VRCX can only show the status lights it saw while running, and only for friends, so this is not the full history",
++                    "shares": "The percentages cover only the time a light was actually recorded. Time that was never recorded is listed separately below and left out of the percentages, so the numbers are not diluted by guesswork",
++                    "inferred": "Counts the unrecorded stretch before each light change as the light that came before it. Measured against this database that estimate matches the next recorded light about 90% of the time, so treat the result as an estimate",
++                    "buckets": "Online with an unknown light: the player was online but no light change was ever recorded. Offline: VRCX saw them log off. Unrecorded: VRCX was not running, so nothing is known about that stretch"
++                },
++                "period": {
++                    "days_7": "7 days",
++                    "days_30": "30 days",
++                    "days_90": "90 days",
++                    "all": "All"
++                },
++                "light": {
++                    "online": "Online",
++                    "joinme": "Join Me",
++                    "askme": "Ask Me",
++                    "busy": "Do Not Disturb"
++                },
++                "stats": {
++                    "recorded": "Time with a light",
++                    "since": "since {date}",
++                    "days": "Days seen",
++                    "last_change": "last change {time}",
++                    "most_used": "Most used",
++                    "most_used_hint": "{percent}% of recorded time",
++                    "switches": "Light changes",
++                    "longest_hint": "longest {light} {duration}"
++                },
++                "section": {
++                    "shares": "How the four lights divide up",
++                    "timeline": "When each light was on",
++                    "hours": "Which light at which hour",
++                    "descriptions": "Custom text edits"
++                },
++                "bucket": {
++                    "unknown_online": "Online, light unknown",
++                    "offline": "Offline",
++                    "unrecorded": "Unrecorded"
++                },
++                "row": {
++                    "average": "avg {duration}"
++                },
++                "state": {
++                    "offline": "Offline",
++                    "unknown": "Unknown",
++                    "inferred": "estimated"
++                },
++                "timeline": {
++                    "recorded": "{duration} with a light",
++                    "no_change": "No light was recorded that day"
++                },
++                "hours": {
++                    "peak": "busiest {hour}:00 - {duration}",
++                    "hour": "{hour}:00"
++                },
++                "descriptions": {
++                    "hint": "VRCX also records edits to the custom text attached to a light. Those change the text without changing the light, so they never appear in the timeline above",
++                    "empty": "No custom text was edited in the selected range"
++                }
+             }
+         },
+         "tools": {
+diff --git a/src/localization/hu.json b/src/localization/hu.json
+index 84f7818f..e928a50c 100644
+--- a/src/localization/hu.json
++++ b/src/localization/hu.json
+@@ -713,6 +713,76 @@
+                     "ongoing": "still here",
+                     "unknown": "left offline"
+                 }
++            },
++            "friend_status_lights": {
++                "tab_label": "Status Lights",
++                "header": "Friend Status Lights",
++                "search_placeholder": "Search friends",
++                "no_candidates": "No friend has a status light record yet",
++                "candidate_changes": "{count} changes",
++                "empty": "No status light was recorded for this friend in the selected range",
++                "toggle": {
++                    "inferred": "Estimate unrecorded time"
++                },
++                "tips": {
++                    "coverage": "VRCX can only show the status lights it saw while running, and only for friends, so this is not the full history",
++                    "shares": "The percentages cover only the time a light was actually recorded. Time that was never recorded is listed separately below and left out of the percentages, so the numbers are not diluted by guesswork",
++                    "inferred": "Counts the unrecorded stretch before each light change as the light that came before it. Measured against this database that estimate matches the next recorded light about 90% of the time, so treat the result as an estimate",
++                    "buckets": "Online with an unknown light: the player was online but no light change was ever recorded. Offline: VRCX saw them log off. Unrecorded: VRCX was not running, so nothing is known about that stretch"
++                },
++                "period": {
++                    "days_7": "7 days",
++                    "days_30": "30 days",
++                    "days_90": "90 days",
++                    "all": "All"
++                },
++                "light": {
++                    "online": "Online",
++                    "joinme": "Join Me",
++                    "askme": "Ask Me",
++                    "busy": "Do Not Disturb"
++                },
++                "stats": {
++                    "recorded": "Time with a light",
++                    "since": "since {date}",
++                    "days": "Days seen",
++                    "last_change": "last change {time}",
++                    "most_used": "Most used",
++                    "most_used_hint": "{percent}% of recorded time",
++                    "switches": "Light changes",
++                    "longest_hint": "longest {light} {duration}"
++                },
++                "section": {
++                    "shares": "How the four lights divide up",
++                    "timeline": "When each light was on",
++                    "hours": "Which light at which hour",
++                    "descriptions": "Custom text edits"
++                },
++                "bucket": {
++                    "unknown_online": "Online, light unknown",
++                    "offline": "Offline",
++                    "unrecorded": "Unrecorded"
++                },
++                "row": {
++                    "average": "avg {duration}"
++                },
++                "state": {
++                    "offline": "Offline",
++                    "unknown": "Unknown",
++                    "inferred": "estimated"
++                },
++                "timeline": {
++                    "recorded": "{duration} with a light",
++                    "no_change": "No light was recorded that day"
++                },
++                "hours": {
++                    "peak": "busiest {hour}:00 - {duration}",
++                    "hour": "{hour}:00"
++                },
++                "descriptions": {
++                    "hint": "VRCX also records edits to the custom text attached to a light. Those change the text without changing the light, so they never appear in the timeline above",
++                    "empty": "No custom text was edited in the selected range"
++                }
+             }
+         },
+         "tools": {
+diff --git a/src/localization/ja.json b/src/localization/ja.json
+index bea38431..0433273b 100644
+--- a/src/localization/ja.json
++++ b/src/localization/ja.json
+@@ -701,6 +701,76 @@
+                     "ongoing": "滞在中",
+                     "unknown": "オフラインで離脱"
+                 }
++            },
++            "friend_status_lights": {
++                "tab_label": "フレンドのステータス",
++                "header": "フレンドのステータス",
++                "search_placeholder": "フレンドを検索",
++                "no_candidates": "まだステータス記録のあるフレンドがいません",
++                "candidate_changes": "{count} 回の変化",
++                "empty": "選択した期間にこのフレンドのステータス記録がありません",
++                "toggle": {
++                    "inferred": "記録のない時間を推定する"
++                },
++                "tips": {
++                    "coverage": "VRCX は起動中に見たステータスしか表示できず、しかもフレンドのみ記録します。完全な履歴ではありません",
++                    "shares": "割合は「実際にステータスが記録された」時間だけで計算しています。記録のない時間は下に別枠で表示し、割合には含めません",
++                    "inferred": "ステータスが変わる前の記録のない時間を、ひとつ前のステータスで埋めます。このデータベースで検証したところ、次に記録されたステータスと約 90% 一致しました。推定値として扱ってください",
++                    "buckets": "オンライン・不明：オンラインでしたがステータスの変化が記録されていません。オフライン：VRCX がログアウトを確認しました。記録なし：VRCX が起動していなかったため、その期間は不明です"
++                },
++                "period": {
++                    "days_7": "7 日",
++                    "days_30": "30 日",
++                    "days_90": "90 日",
++                    "all": "すべて"
++                },
++                "light": {
++                    "online": "オンライン",
++                    "joinme": "だれでもおいで",
++                    "askme": "きいてみてね",
++                    "busy": "取り込み中"
++                },
++                "stats": {
++                    "recorded": "記録された時間",
++                    "since": "{date} から",
++                    "days": "記録のある日数",
++                    "last_change": "最終変化 {time}",
++                    "most_used": "最も多い",
++                    "most_used_hint": "記録時間の {percent}%",
++                    "switches": "切り替え回数",
++                    "longest_hint": "最長 {light} {duration}"
++                },
++                "section": {
++                    "shares": "4 つのステータスの割合",
++                    "timeline": "いつ何のステータスだったか",
++                    "hours": "時間帯ごとのステータス",
++                    "descriptions": "カスタムテキストの変更"
++                },
++                "bucket": {
++                    "unknown_online": "オンライン・不明",
++                    "offline": "オフライン",
++                    "unrecorded": "記録なし"
++                },
++                "row": {
++                    "average": "平均 {duration}"
++                },
++                "state": {
++                    "offline": "オフライン",
++                    "unknown": "不明",
++                    "inferred": "推定"
++                },
++                "timeline": {
++                    "recorded": "記録 {duration}",
++                    "no_change": "この日はステータスが記録されていません"
++                },
++                "hours": {
++                    "peak": "最多 {hour} 時 · {duration}",
++                    "hour": "{hour} 時"
++                },
++                "descriptions": {
++                    "hint": "VRCX はステータスのカスタムテキストの変更も記録します。これはテキストだけが変わりステータスは変わらないため、上のタイムラインには出てきません",
++                    "empty": "選択した期間にカスタムテキストの変更はありません"
++                }
+             }
+         },
+         "tools": {
+diff --git a/src/localization/ko.json b/src/localization/ko.json
+index b9da4fbf..6909b400 100644
+--- a/src/localization/ko.json
++++ b/src/localization/ko.json
+@@ -466,6 +466,78 @@
+                     }
+                 }
+             }
++        },
++        "charts": {
++            "friend_status_lights": {
++                "tab_label": "Status Lights",
++                "header": "Friend Status Lights",
++                "search_placeholder": "Search friends",
++                "no_candidates": "No friend has a status light record yet",
++                "candidate_changes": "{count} changes",
++                "empty": "No status light was recorded for this friend in the selected range",
++                "toggle": {
++                    "inferred": "Estimate unrecorded time"
++                },
++                "tips": {
++                    "coverage": "VRCX can only show the status lights it saw while running, and only for friends, so this is not the full history",
++                    "shares": "The percentages cover only the time a light was actually recorded. Time that was never recorded is listed separately below and left out of the percentages, so the numbers are not diluted by guesswork",
++                    "inferred": "Counts the unrecorded stretch before each light change as the light that came before it. Measured against this database that estimate matches the next recorded light about 90% of the time, so treat the result as an estimate",
++                    "buckets": "Online with an unknown light: the player was online but no light change was ever recorded. Offline: VRCX saw them log off. Unrecorded: VRCX was not running, so nothing is known about that stretch"
++                },
++                "period": {
++                    "days_7": "7 days",
++                    "days_30": "30 days",
++                    "days_90": "90 days",
++                    "all": "All"
++                },
++                "light": {
++                    "online": "Online",
++                    "joinme": "Join Me",
++                    "askme": "Ask Me",
++                    "busy": "Do Not Disturb"
++                },
++                "stats": {
++                    "recorded": "Time with a light",
++                    "since": "since {date}",
++                    "days": "Days seen",
++                    "last_change": "last change {time}",
++                    "most_used": "Most used",
++                    "most_used_hint": "{percent}% of recorded time",
++                    "switches": "Light changes",
++                    "longest_hint": "longest {light} {duration}"
++                },
++                "section": {
++                    "shares": "How the four lights divide up",
++                    "timeline": "When each light was on",
++                    "hours": "Which light at which hour",
++                    "descriptions": "Custom text edits"
++                },
++                "bucket": {
++                    "unknown_online": "Online, light unknown",
++                    "offline": "Offline",
++                    "unrecorded": "Unrecorded"
++                },
++                "row": {
++                    "average": "avg {duration}"
++                },
++                "state": {
++                    "offline": "Offline",
++                    "unknown": "Unknown",
++                    "inferred": "estimated"
++                },
++                "timeline": {
++                    "recorded": "{duration} with a light",
++                    "no_change": "No light was recorded that day"
++                },
++                "hours": {
++                    "peak": "busiest {hour}:00 - {duration}",
++                    "hour": "{hour}:00"
++                },
++                "descriptions": {
++                    "hint": "VRCX also records edits to the custom text attached to a light. Those change the text without changing the light, so they never appear in the timeline above",
++                    "empty": "No custom text was edited in the selected range"
++                }
++            }
+         }
+     },
+     "dialog": {
+diff --git a/src/localization/pl.json b/src/localization/pl.json
+index 535b2427..c7315fa2 100644
+--- a/src/localization/pl.json
++++ b/src/localization/pl.json
+@@ -386,6 +386,76 @@
+                     "ongoing": "still here",
+                     "unknown": "left offline"
+                 }
++            },
++            "friend_status_lights": {
++                "tab_label": "Status Lights",
++                "header": "Friend Status Lights",
++                "search_placeholder": "Search friends",
++                "no_candidates": "No friend has a status light record yet",
++                "candidate_changes": "{count} changes",
++                "empty": "No status light was recorded for this friend in the selected range",
++                "toggle": {
++                    "inferred": "Estimate unrecorded time"
++                },
++                "tips": {
++                    "coverage": "VRCX can only show the status lights it saw while running, and only for friends, so this is not the full history",
++                    "shares": "The percentages cover only the time a light was actually recorded. Time that was never recorded is listed separately below and left out of the percentages, so the numbers are not diluted by guesswork",
++                    "inferred": "Counts the unrecorded stretch before each light change as the light that came before it. Measured against this database that estimate matches the next recorded light about 90% of the time, so treat the result as an estimate",
++                    "buckets": "Online with an unknown light: the player was online but no light change was ever recorded. Offline: VRCX saw them log off. Unrecorded: VRCX was not running, so nothing is known about that stretch"
++                },
++                "period": {
++                    "days_7": "7 days",
++                    "days_30": "30 days",
++                    "days_90": "90 days",
++                    "all": "All"
++                },
++                "light": {
++                    "online": "Online",
++                    "joinme": "Join Me",
++                    "askme": "Ask Me",
++                    "busy": "Do Not Disturb"
++                },
++                "stats": {
++                    "recorded": "Time with a light",
++                    "since": "since {date}",
++                    "days": "Days seen",
++                    "last_change": "last change {time}",
++                    "most_used": "Most used",
++                    "most_used_hint": "{percent}% of recorded time",
++                    "switches": "Light changes",
++                    "longest_hint": "longest {light} {duration}"
++                },
++                "section": {
++                    "shares": "How the four lights divide up",
++                    "timeline": "When each light was on",
++                    "hours": "Which light at which hour",
++                    "descriptions": "Custom text edits"
++                },
++                "bucket": {
++                    "unknown_online": "Online, light unknown",
++                    "offline": "Offline",
++                    "unrecorded": "Unrecorded"
++                },
++                "row": {
++                    "average": "avg {duration}"
++                },
++                "state": {
++                    "offline": "Offline",
++                    "unknown": "Unknown",
++                    "inferred": "estimated"
++                },
++                "timeline": {
++                    "recorded": "{duration} with a light",
++                    "no_change": "No light was recorded that day"
++                },
++                "hours": {
++                    "peak": "busiest {hour}:00 - {duration}",
++                    "hour": "{hour}:00"
++                },
++                "descriptions": {
++                    "hint": "VRCX also records edits to the custom text attached to a light. Those change the text without changing the light, so they never appear in the timeline above",
++                    "empty": "No custom text was edited in the selected range"
++                }
+             }
+         },
+         "tools": {
+diff --git a/src/localization/pt.json b/src/localization/pt.json
+index 54141ca4..1d84fc84 100644
+--- a/src/localization/pt.json
++++ b/src/localization/pt.json
+@@ -643,6 +643,76 @@
+                     "ongoing": "still here",
+                     "unknown": "left offline"
+                 }
++            },
++            "friend_status_lights": {
++                "tab_label": "Status Lights",
++                "header": "Friend Status Lights",
++                "search_placeholder": "Search friends",
++                "no_candidates": "No friend has a status light record yet",
++                "candidate_changes": "{count} changes",
++                "empty": "No status light was recorded for this friend in the selected range",
++                "toggle": {
++                    "inferred": "Estimate unrecorded time"
++                },
++                "tips": {
++                    "coverage": "VRCX can only show the status lights it saw while running, and only for friends, so this is not the full history",
++                    "shares": "The percentages cover only the time a light was actually recorded. Time that was never recorded is listed separately below and left out of the percentages, so the numbers are not diluted by guesswork",
++                    "inferred": "Counts the unrecorded stretch before each light change as the light that came before it. Measured against this database that estimate matches the next recorded light about 90% of the time, so treat the result as an estimate",
++                    "buckets": "Online with an unknown light: the player was online but no light change was ever recorded. Offline: VRCX saw them log off. Unrecorded: VRCX was not running, so nothing is known about that stretch"
++                },
++                "period": {
++                    "days_7": "7 days",
++                    "days_30": "30 days",
++                    "days_90": "90 days",
++                    "all": "All"
++                },
++                "light": {
++                    "online": "Online",
++                    "joinme": "Join Me",
++                    "askme": "Ask Me",
++                    "busy": "Do Not Disturb"
++                },
++                "stats": {
++                    "recorded": "Time with a light",
++                    "since": "since {date}",
++                    "days": "Days seen",
++                    "last_change": "last change {time}",
++                    "most_used": "Most used",
++                    "most_used_hint": "{percent}% of recorded time",
++                    "switches": "Light changes",
++                    "longest_hint": "longest {light} {duration}"
++                },
++                "section": {
++                    "shares": "How the four lights divide up",
++                    "timeline": "When each light was on",
++                    "hours": "Which light at which hour",
++                    "descriptions": "Custom text edits"
++                },
++                "bucket": {
++                    "unknown_online": "Online, light unknown",
++                    "offline": "Offline",
++                    "unrecorded": "Unrecorded"
++                },
++                "row": {
++                    "average": "avg {duration}"
++                },
++                "state": {
++                    "offline": "Offline",
++                    "unknown": "Unknown",
++                    "inferred": "estimated"
++                },
++                "timeline": {
++                    "recorded": "{duration} with a light",
++                    "no_change": "No light was recorded that day"
++                },
++                "hours": {
++                    "peak": "busiest {hour}:00 - {duration}",
++                    "hour": "{hour}:00"
++                },
++                "descriptions": {
++                    "hint": "VRCX also records edits to the custom text attached to a light. Those change the text without changing the light, so they never appear in the timeline above",
++                    "empty": "No custom text was edited in the selected range"
++                }
+             }
+         },
+         "tools": {
+diff --git a/src/localization/ru.json b/src/localization/ru.json
+index 58622d2e..222c3f7c 100644
+--- a/src/localization/ru.json
++++ b/src/localization/ru.json
+@@ -299,6 +299,76 @@
+                     "ongoing": "still here",
+                     "unknown": "left offline"
+                 }
++            },
++            "friend_status_lights": {
++                "tab_label": "Status Lights",
++                "header": "Friend Status Lights",
++                "search_placeholder": "Search friends",
++                "no_candidates": "No friend has a status light record yet",
++                "candidate_changes": "{count} changes",
++                "empty": "No status light was recorded for this friend in the selected range",
++                "toggle": {
++                    "inferred": "Estimate unrecorded time"
++                },
++                "tips": {
++                    "coverage": "VRCX can only show the status lights it saw while running, and only for friends, so this is not the full history",
++                    "shares": "The percentages cover only the time a light was actually recorded. Time that was never recorded is listed separately below and left out of the percentages, so the numbers are not diluted by guesswork",
++                    "inferred": "Counts the unrecorded stretch before each light change as the light that came before it. Measured against this database that estimate matches the next recorded light about 90% of the time, so treat the result as an estimate",
++                    "buckets": "Online with an unknown light: the player was online but no light change was ever recorded. Offline: VRCX saw them log off. Unrecorded: VRCX was not running, so nothing is known about that stretch"
++                },
++                "period": {
++                    "days_7": "7 days",
++                    "days_30": "30 days",
++                    "days_90": "90 days",
++                    "all": "All"
++                },
++                "light": {
++                    "online": "Online",
++                    "joinme": "Join Me",
++                    "askme": "Ask Me",
++                    "busy": "Do Not Disturb"
++                },
++                "stats": {
++                    "recorded": "Time with a light",
++                    "since": "since {date}",
++                    "days": "Days seen",
++                    "last_change": "last change {time}",
++                    "most_used": "Most used",
++                    "most_used_hint": "{percent}% of recorded time",
++                    "switches": "Light changes",
++                    "longest_hint": "longest {light} {duration}"
++                },
++                "section": {
++                    "shares": "How the four lights divide up",
++                    "timeline": "When each light was on",
++                    "hours": "Which light at which hour",
++                    "descriptions": "Custom text edits"
++                },
++                "bucket": {
++                    "unknown_online": "Online, light unknown",
++                    "offline": "Offline",
++                    "unrecorded": "Unrecorded"
++                },
++                "row": {
++                    "average": "avg {duration}"
++                },
++                "state": {
++                    "offline": "Offline",
++                    "unknown": "Unknown",
++                    "inferred": "estimated"
++                },
++                "timeline": {
++                    "recorded": "{duration} with a light",
++                    "no_change": "No light was recorded that day"
++                },
++                "hours": {
++                    "peak": "busiest {hour}:00 - {duration}",
++                    "hour": "{hour}:00"
++                },
++                "descriptions": {
++                    "hint": "VRCX also records edits to the custom text attached to a light. Those change the text without changing the light, so they never appear in the timeline above",
++                    "empty": "No custom text was edited in the selected range"
++                }
+             }
+         },
+         "tools": {
+diff --git a/src/localization/th.json b/src/localization/th.json
+index a00eff4e..1c187d31 100644
+--- a/src/localization/th.json
++++ b/src/localization/th.json
+@@ -536,6 +536,76 @@
+                     "ongoing": "still here",
+                     "unknown": "left offline"
+                 }
++            },
++            "friend_status_lights": {
++                "tab_label": "Status Lights",
++                "header": "Friend Status Lights",
++                "search_placeholder": "Search friends",
++                "no_candidates": "No friend has a status light record yet",
++                "candidate_changes": "{count} changes",
++                "empty": "No status light was recorded for this friend in the selected range",
++                "toggle": {
++                    "inferred": "Estimate unrecorded time"
++                },
++                "tips": {
++                    "coverage": "VRCX can only show the status lights it saw while running, and only for friends, so this is not the full history",
++                    "shares": "The percentages cover only the time a light was actually recorded. Time that was never recorded is listed separately below and left out of the percentages, so the numbers are not diluted by guesswork",
++                    "inferred": "Counts the unrecorded stretch before each light change as the light that came before it. Measured against this database that estimate matches the next recorded light about 90% of the time, so treat the result as an estimate",
++                    "buckets": "Online with an unknown light: the player was online but no light change was ever recorded. Offline: VRCX saw them log off. Unrecorded: VRCX was not running, so nothing is known about that stretch"
++                },
++                "period": {
++                    "days_7": "7 days",
++                    "days_30": "30 days",
++                    "days_90": "90 days",
++                    "all": "All"
++                },
++                "light": {
++                    "online": "Online",
++                    "joinme": "Join Me",
++                    "askme": "Ask Me",
++                    "busy": "Do Not Disturb"
++                },
++                "stats": {
++                    "recorded": "Time with a light",
++                    "since": "since {date}",
++                    "days": "Days seen",
++                    "last_change": "last change {time}",
++                    "most_used": "Most used",
++                    "most_used_hint": "{percent}% of recorded time",
++                    "switches": "Light changes",
++                    "longest_hint": "longest {light} {duration}"
++                },
++                "section": {
++                    "shares": "How the four lights divide up",
++                    "timeline": "When each light was on",
++                    "hours": "Which light at which hour",
++                    "descriptions": "Custom text edits"
++                },
++                "bucket": {
++                    "unknown_online": "Online, light unknown",
++                    "offline": "Offline",
++                    "unrecorded": "Unrecorded"
++                },
++                "row": {
++                    "average": "avg {duration}"
++                },
++                "state": {
++                    "offline": "Offline",
++                    "unknown": "Unknown",
++                    "inferred": "estimated"
++                },
++                "timeline": {
++                    "recorded": "{duration} with a light",
++                    "no_change": "No light was recorded that day"
++                },
++                "hours": {
++                    "peak": "busiest {hour}:00 - {duration}",
++                    "hour": "{hour}:00"
++                },
++                "descriptions": {
++                    "hint": "VRCX also records edits to the custom text attached to a light. Those change the text without changing the light, so they never appear in the timeline above",
++                    "empty": "No custom text was edited in the selected range"
++                }
+             }
+         },
+         "tools": {
+diff --git a/src/localization/vi.json b/src/localization/vi.json
+index ccb58cc1..2210201b 100644
+--- a/src/localization/vi.json
++++ b/src/localization/vi.json
+@@ -455,6 +455,78 @@
+                     }
+                 }
+             }
++        },
++        "charts": {
++            "friend_status_lights": {
++                "tab_label": "Status Lights",
++                "header": "Friend Status Lights",
++                "search_placeholder": "Search friends",
++                "no_candidates": "No friend has a status light record yet",
++                "candidate_changes": "{count} changes",
++                "empty": "No status light was recorded for this friend in the selected range",
++                "toggle": {
++                    "inferred": "Estimate unrecorded time"
++                },
++                "tips": {
++                    "coverage": "VRCX can only show the status lights it saw while running, and only for friends, so this is not the full history",
++                    "shares": "The percentages cover only the time a light was actually recorded. Time that was never recorded is listed separately below and left out of the percentages, so the numbers are not diluted by guesswork",
++                    "inferred": "Counts the unrecorded stretch before each light change as the light that came before it. Measured against this database that estimate matches the next recorded light about 90% of the time, so treat the result as an estimate",
++                    "buckets": "Online with an unknown light: the player was online but no light change was ever recorded. Offline: VRCX saw them log off. Unrecorded: VRCX was not running, so nothing is known about that stretch"
++                },
++                "period": {
++                    "days_7": "7 days",
++                    "days_30": "30 days",
++                    "days_90": "90 days",
++                    "all": "All"
++                },
++                "light": {
++                    "online": "Online",
++                    "joinme": "Join Me",
++                    "askme": "Ask Me",
++                    "busy": "Do Not Disturb"
++                },
++                "stats": {
++                    "recorded": "Time with a light",
++                    "since": "since {date}",
++                    "days": "Days seen",
++                    "last_change": "last change {time}",
++                    "most_used": "Most used",
++                    "most_used_hint": "{percent}% of recorded time",
++                    "switches": "Light changes",
++                    "longest_hint": "longest {light} {duration}"
++                },
++                "section": {
++                    "shares": "How the four lights divide up",
++                    "timeline": "When each light was on",
++                    "hours": "Which light at which hour",
++                    "descriptions": "Custom text edits"
++                },
++                "bucket": {
++                    "unknown_online": "Online, light unknown",
++                    "offline": "Offline",
++                    "unrecorded": "Unrecorded"
++                },
++                "row": {
++                    "average": "avg {duration}"
++                },
++                "state": {
++                    "offline": "Offline",
++                    "unknown": "Unknown",
++                    "inferred": "estimated"
++                },
++                "timeline": {
++                    "recorded": "{duration} with a light",
++                    "no_change": "No light was recorded that day"
++                },
++                "hours": {
++                    "peak": "busiest {hour}:00 - {duration}",
++                    "hour": "{hour}:00"
++                },
++                "descriptions": {
++                    "hint": "VRCX also records edits to the custom text attached to a light. Those change the text without changing the light, so they never appear in the timeline above",
++                    "empty": "No custom text was edited in the selected range"
++                }
++            }
+         }
+     },
+     "dialog": {
+diff --git a/src/localization/zh-CN.json b/src/localization/zh-CN.json
+index 7bbbd97f..57f1f1d5 100644
+--- a/src/localization/zh-CN.json
++++ b/src/localization/zh-CN.json
+@@ -709,6 +709,76 @@
+                     "ongoing": "还在这里",
+                     "unknown": "离线时离开"
+                 }
++            },
++            "friend_status_lights": {
++                "tab_label": "好友状态灯",
++                "header": "好友状态灯",
++                "search_placeholder": "搜索好友",
++                "no_candidates": "还没有好友的状态灯记录",
++                "candidate_changes": "{count} 次变化",
++                "empty": "所选时间范围内没有记录到这位好友的状态灯",
++                "toggle": {
++                    "inferred": "推算没记录到的时间"
++                },
++                "tips": {
++                    "coverage": "VRCX 只能显示它运行期间看到的状态灯，而且只记录好友，所以这不是完整历史",
++                    "shares": "百分比只按「确实记录到状态灯」的那部分时间计算。没记录到的时间单独列在下面，不掺进百分比，所以数字不会被猜测稀释",
++                    "inferred": "把每次换灯之前那段没记录到的时间，也按上一种灯算进去。用你库里的数据实测，这个推算和下一次真正记录到的灯大约 90% 一致，所以结果是估计值",
++                    "buckets": "在线但未知：人在线，可是一直没换过灯，所以不知道当时挂的什么。离线：VRCX 看到他下线了。无记录：VRCX 当时没在运行，这段时间什么都不知道"
++                },
++                "period": {
++                    "days_7": "7 天",
++                    "days_30": "30 天",
++                    "days_90": "90 天",
++                    "all": "全部"
++                },
++                "light": {
++                    "online": "在线",
++                    "joinme": "欢迎加入",
++                    "askme": "问问看",
++                    "busy": "请勿打扰"
++                },
++                "stats": {
++                    "recorded": "记录到灯的时间",
++                    "since": "始于 {date}",
++                    "days": "有记录的天数",
++                    "last_change": "最近变化 {time}",
++                    "most_used": "最常挂的灯",
++                    "most_used_hint": "占记录时长的 {percent}%",
++                    "switches": "换灯次数",
++                    "longest_hint": "最长一次 {light} 挂了 {duration}"
++                },
++                "section": {
++                    "shares": "四种灯各占多少",
++                    "timeline": "什么时候是什么灯",
++                    "hours": "几点挂什么灯",
++                    "descriptions": "文案改动"
++                },
++                "bucket": {
++                    "unknown_online": "在线但未知",
++                    "offline": "离线",
++                    "unrecorded": "无记录"
++                },
++                "row": {
++                    "average": "平均 {duration}"
++                },
++                "state": {
++                    "offline": "离线",
++                    "unknown": "未知",
++                    "inferred": "推算"
++                },
++                "timeline": {
++                    "recorded": "记录到灯 {duration}",
++                    "no_change": "这天没有记录到状态灯"
++                },
++                "hours": {
++                    "peak": "最活跃 {hour} 点 · {duration}",
++                    "hour": "{hour} 点"
++                },
++                "descriptions": {
++                    "hint": "VRCX 也会记录对灯上自定义文案的修改。这类改动只换文字不换灯，所以不会出现在上面的时间线里",
++                    "empty": "所选时间范围内没有文案改动"
++                }
+             }
+         },
+         "tools": {
+diff --git a/src/localization/zh-TW.json b/src/localization/zh-TW.json
+index ede41a40..211af1b2 100644
+--- a/src/localization/zh-TW.json
++++ b/src/localization/zh-TW.json
+@@ -697,6 +697,76 @@
+                     "ongoing": "還在這裡",
+                     "unknown": "離線時離開"
+                 }
++            },
++            "friend_status_lights": {
++                "tab_label": "好友狀態燈",
++                "header": "好友狀態燈",
++                "search_placeholder": "搜尋好友",
++                "no_candidates": "還沒有好友的狀態燈紀錄",
++                "candidate_changes": "{count} 次變化",
++                "empty": "所選時間範圍內沒有記錄到這位好友的狀態燈",
++                "toggle": {
++                    "inferred": "推算沒記錄到的時間"
++                },
++                "tips": {
++                    "coverage": "VRCX 只能顯示它執行期間看到的狀態燈，而且只記錄好友，所以這不是完整歷史",
++                    "shares": "百分比只按「確實記錄到狀態燈」的那部分時間計算。沒記錄到的時間單獨列在下面，不摻進百分比，所以數字不會被猜測稀釋",
++                    "inferred": "把每次換燈之前那段沒記錄到的時間，也按上一種燈算進去。用你資料庫的資料實測，這個推測和下一次真正記錄到的燈大約 90% 一致，所以結果是估計值",
++                    "buckets": "上線但未知：人在線上，可是一直沒換過燈，所以不知道當時掛的是什麼。離線：VRCX 看到他下線了。無紀錄：VRCX 當時沒在執行，這段時間什麼都不知道"
++                },
++                "period": {
++                    "days_7": "7 天",
++                    "days_30": "30 天",
++                    "days_90": "90 天",
++                    "all": "全部"
++                },
++                "light": {
++                    "online": "上線",
++                    "joinme": "加入我",
++                    "askme": "問問看",
++                    "busy": "請勿打擾"
++                },
++                "stats": {
++                    "recorded": "記錄到燈的時間",
++                    "since": "始於 {date}",
++                    "days": "有紀錄的天數",
++                    "last_change": "最近變化 {time}",
++                    "most_used": "最常掛的燈",
++                    "most_used_hint": "占記錄時長的 {percent}%",
++                    "switches": "換燈次數",
++                    "longest_hint": "最長一次 {light} 掛了 {duration}"
++                },
++                "section": {
++                    "shares": "四種燈各占多少",
++                    "timeline": "什麼時候是什麼燈",
++                    "hours": "幾點掛什麼燈",
++                    "descriptions": "文案改動"
++                },
++                "bucket": {
++                    "unknown_online": "上線但未知",
++                    "offline": "離線",
++                    "unrecorded": "無紀錄"
++                },
++                "row": {
++                    "average": "平均 {duration}"
++                },
++                "state": {
++                    "offline": "離線",
++                    "unknown": "未知",
++                    "inferred": "推測"
++                },
++                "timeline": {
++                    "recorded": "記錄到燈 {duration}",
++                    "no_change": "這天沒有記錄到狀態燈"
++                },
++                "hours": {
++                    "peak": "最活躍 {hour} 點 · {duration}",
++                    "hour": "{hour} 點"
++                },
++                "descriptions": {
++                    "hint": "VRCX 也會記錄對燈上自訂文案的修改。這類改動只換文字不換燈，所以不會出現在上面的時間軸裡",
++                    "empty": "所選時間範圍內沒有文案改動"
++                }
+             }
+         },
+         "tools": {
+diff --git a/src/plugins/router.js b/src/plugins/router.js
+index f6e464c9..d97bee4e 100644
+--- a/src/plugins/router.js
++++ b/src/plugins/router.js
+@@ -117,6 +117,11 @@ const routes = [
+                 name: 'charts-friend-footprints',
+                 component: () => import('./../views/Charts/components/FriendFootprints.vue')
+             },
++            {
++                path: 'charts/friend-status-lights',
++                name: 'charts-friend-status-lights',
++                component: () => import('./../views/Charts/components/FriendStatusLights.vue')
++            },
+             { path: 'tools', name: 'tools', component: Tools },
+             {
+                 path: 'tools/gallery',
+diff --git a/src/services/database/__tests__/feed.test.js b/src/services/database/__tests__/feed.test.js
+index 2935416d..de385ee9 100644
+--- a/src/services/database/__tests__/feed.test.js
++++ b/src/services/database/__tests__/feed.test.js
+@@ -159,6 +159,130 @@ describe('feed.getPlayersWithGpsHistory', () => {
+     });
+ });
+ 
++describe('feed.getStatusRowsForUserId', () => {
++    beforeEach(() => {
++        mocks.execute.mockReset();
++    });
++
++    test('maps rows and keeps the ascending order', async () => {
++        mocks.execute.mockImplementation(async (callback) => {
++            callback(['2026-09-20T00:00:00.000Z', 'busy', '加班中', 'active', '在线']);
++            return undefined;
++        });
++
++        const result = await feed.getStatusRowsForUserId('usr_1');
++
++        expect(result).toEqual([
++            {
++                created_at: '2026-09-20T00:00:00.000Z',
++                status: 'busy',
++                status_description: '加班中',
++                previous_status: 'active',
++                previous_status_description: '在线'
++            }
++        ]);
++        const sql = mocks.execute.mock.calls[0][1];
++        expect(sql).toContain('usr123_feed_status');
++        expect(sql).toContain('ORDER BY created_at ASC, id ASC');
++        expect(mocks.execute.mock.calls[0][2]).toMatchObject({ '@user_id': 'usr_1' });
++        expect(sql).not.toContain('AND created_at >=');
++    });
++
++    test('adds the date filter only when a start date is given', async () => {
++        mocks.execute.mockImplementation(async () => undefined);
++
++        await feed.getStatusRowsForUserId('usr_1', '2026-09-01T00:00:00.000Z');
++
++        expect(mocks.execute.mock.calls[0][1]).toContain('AND created_at >= @created_after');
++        expect(mocks.execute.mock.calls[0][2]).toMatchObject({ '@created_after': '2026-09-01T00:00:00.000Z' });
++    });
++
++    test('coerces null columns to empty strings', async () => {
++        mocks.execute.mockImplementation(async (callback) => {
++            callback(['2026-09-20T00:00:00.000Z', null, null, null, null]);
++            return undefined;
++        });
++
++        const result = await feed.getStatusRowsForUserId('usr_1');
++
++        expect(result[0]).toMatchObject({ status: '', status_description: '', previous_status: '' });
++    });
++
++    test('does not filter out rows whose light stayed put', async () => {
++        mocks.execute.mockImplementation(async () => undefined);
++
++        await feed.getStatusRowsForUserId('usr_1');
++
++        // a text-only edit keeps the light but is still a real change, so the read
++        // must not discard rows where status equals previous_status
++        expect(mocks.execute.mock.calls[0][1]).not.toContain('status != previous_status');
++    });
++});
++
++describe('feed.getPresenceRowsForUserId', () => {
++    beforeEach(() => {
++        mocks.execute.mockReset();
++    });
++
++    test('maps rows to time and type, oldest first', async () => {
++        mocks.execute.mockImplementation(async (callback) => {
++            callback(['2026-09-20T00:00:00.000Z', 'Online']);
++            return undefined;
++        });
++
++        const result = await feed.getPresenceRowsForUserId('usr_1');
++
++        expect(result).toEqual([{ created_at: '2026-09-20T00:00:00.000Z', type: 'Online' }]);
++        const sql = mocks.execute.mock.calls[0][1];
++        expect(sql).toContain('usr123_feed_online_offline');
++        expect(sql).toContain('ORDER BY created_at ASC, id ASC');
++        expect(sql).not.toContain('AND created_at >=');
++    });
++
++    test('adds the date filter only when a start date is given', async () => {
++        mocks.execute.mockImplementation(async () => undefined);
++
++        await feed.getPresenceRowsForUserId('usr_1', '2026-09-01T00:00:00.000Z');
++
++        expect(mocks.execute.mock.calls[0][1]).toContain('AND created_at >= @created_after');
++    });
++});
++
++describe('feed.getPlayersWithStatusHistory', () => {
++    beforeEach(() => {
++        mocks.execute.mockReset();
++    });
++
++    test('returns one entry per player with a change count', async () => {
++        mocks.execute.mockImplementation(async (callback) => {
++            callback(['usr_1', 'Tester', 91, '2026-09-20T00:00:00.000Z']);
++            return undefined;
++        });
++
++        const result = await feed.getPlayersWithStatusHistory();
++
++        expect(result).toEqual([
++            {
++                userId: 'usr_1',
++                displayName: 'Tester',
++                changes: 91,
++                lastAt: '2026-09-20T00:00:00.000Z'
++            }
++        ]);
++        expect(mocks.execute.mock.calls[0][1]).toContain('GROUP BY user_id');
++        expect(mocks.execute.mock.calls[0][1]).not.toContain('WHERE');
++    });
++
++    test('filters by start date when given', async () => {
++        mocks.execute.mockImplementation(async () => undefined);
++
++        await feed.getPlayersWithStatusHistory('2026-09-01T00:00:00.000Z');
++
++        expect(mocks.execute.mock.calls[0][1]).toContain('WHERE created_at >= @created_after');
++        expect(mocks.execute.mock.calls[0][2]).toMatchObject({ '@created_after': '2026-09-01T00:00:00.000Z' });
++    });
++});
++
+ describe('feed.addBioToDatabase', () => {
+     beforeEach(() => {
+         mocks.executeNonQuery.mockReset();
+diff --git a/src/services/database/feed.js b/src/services/database/feed.js
+index 739c22f1..f7ebd721 100644
+--- a/src/services/database/feed.js
++++ b/src/services/database/feed.js
+@@ -145,6 +145,104 @@ const feed = {
+         return players;
+     },
+ 
++    /**
++     * Loads every recorded status light change of one player, oldest first.
++     *
++     * Rows where the light did not change but its custom text did are kept: they are
++     * real edits, and the status light dashboard reports them separately instead of
++     * dropping them. Aggregation lives in shared/utils/friendStatusLights.js, so this
++     * stays a plain ordered read.
++     *
++     * @param {string} userId - VRChat user id.
++     * @param {string} [createdAfter] - ISO timestamp to start from, empty for everything.
++     * @param {number} maxEntries - Maximum number of rows to return.
++     * @returns {Promise<object[]>} Raw feed_status rows.
++     */
++    async getStatusRowsForUserId(userId, createdAfter = '', maxEntries = 20000) {
++        const rows = [];
++        let dateFilter = '';
++        const args = { '@user_id': userId, '@limit': maxEntries };
++        if (createdAfter) {
++            dateFilter = 'AND created_at >= @created_after ';
++            args['@created_after'] = createdAfter;
++        }
++        await sqliteService.execute(
++            (dbRow) => {
++                rows.push({
++                    created_at: dbRow[0],
++                    status: dbRow[1] ?? '',
++                    status_description: dbRow[2] ?? '',
++                    previous_status: dbRow[3] ?? '',
++                    previous_status_description: dbRow[4] ?? ''
++                });
++            },
++            `SELECT created_at, status, status_description, previous_status, previous_status_description FROM ${dbVars.userPrefix}_feed_status WHERE user_id = @user_id ${dateFilter}ORDER BY created_at ASC, id ASC LIMIT @limit`,
++            args
++        );
++        return rows;
++    },
++
++    /**
++     * Loads every recorded online/offline transition of one player, oldest first.
++     *
++     * The table repeats itself, so callers should expect adjacent rows of the same
++     * type rather than assume a strict alternation.
++     *
++     * @param {string} userId - VRChat user id.
++     * @param {string} [createdAfter] - ISO timestamp to start from, empty for everything.
++     * @param {number} maxEntries - Maximum number of rows to return.
++     * @returns {Promise<object[]>} Raw feed_online_offline rows.
++     */
++    async getPresenceRowsForUserId(userId, createdAfter = '', maxEntries = 20000) {
++        const rows = [];
++        let dateFilter = '';
++        const args = { '@user_id': userId, '@limit': maxEntries };
++        if (createdAfter) {
++            dateFilter = 'AND created_at >= @created_after ';
++            args['@created_after'] = createdAfter;
++        }
++        await sqliteService.execute(
++            (dbRow) => {
++                rows.push({
++                    created_at: dbRow[0],
++                    type: dbRow[1] ?? ''
++                });
++            },
++            `SELECT created_at, type FROM ${dbVars.userPrefix}_feed_online_offline WHERE user_id = @user_id ${dateFilter}ORDER BY created_at ASC, id ASC LIMIT @limit`,
++            args
++        );
++        return rows;
++    },
++
++    /**
++     * Lists players that have recorded status light history, most recently seen first.
++     *
++     * @param {string} [createdAfter] - ISO timestamp to start from, empty for everything.
++     * @returns {Promise<object[]>} One entry per player with a change count.
++     */
++    async getPlayersWithStatusHistory(createdAfter = '') {
++        const players = [];
++        let dateFilter = '';
++        const args = {};
++        if (createdAfter) {
++            dateFilter = 'WHERE created_at >= @created_after ';
++            args['@created_after'] = createdAfter;
++        }
++        await sqliteService.execute(
++            (dbRow) => {
++                players.push({
++                    userId: dbRow[0],
++                    displayName: dbRow[1] ?? '',
++                    changes: Number(dbRow[2]) || 0,
++                    lastAt: dbRow[3] ?? ''
++                });
++            },
++            `SELECT user_id, MAX(display_name), COUNT(*), MAX(created_at) FROM ${dbVars.userPrefix}_feed_status ${dateFilter}GROUP BY user_id ORDER BY MAX(created_at) DESC`,
++            args
++        );
++        return players;
++    },
++
+     addAvatarToDatabase(entry) {
+         sqliteService.executeNonQuery(
+             `INSERT OR IGNORE INTO ${dbVars.userPrefix}_feed_avatar (created_at, user_id, display_name, owner_id, avatar_name, current_avatar_image_url, current_avatar_thumbnail_image_url, previous_current_avatar_image_url, previous_current_avatar_thumbnail_image_url) VALUES (@created_at, @user_id, @display_name, @owner_id, @avatar_name, @current_avatar_image_url, @current_avatar_thumbnail_image_url, @previous_current_avatar_image_url, @previous_current_avatar_thumbnail_image_url)`,
+diff --git a/src/services/database/index.js b/src/services/database/index.js
+index 481ebd0a..009f3361 100644
+--- a/src/services/database/index.js
++++ b/src/services/database/index.js
+@@ -68,6 +68,9 @@ const database = {
+         await sqliteService.executeNonQuery(
+             `CREATE TABLE IF NOT EXISTS ${dbVars.userPrefix}_feed_status (id INTEGER PRIMARY KEY, created_at TEXT, user_id TEXT, display_name TEXT, status TEXT, status_description TEXT, previous_status TEXT, previous_status_description TEXT)`
+         );
++        await sqliteService.executeNonQuery(
++            `CREATE INDEX IF NOT EXISTS ${dbVars.userPrefix}_feed_status_user_created_idx ON ${dbVars.userPrefix}_feed_status (user_id, created_at)`
++        );
+         await sqliteService.executeNonQuery(
+             `CREATE TABLE IF NOT EXISTS ${dbVars.userPrefix}_feed_bio (id INTEGER PRIMARY KEY, created_at TEXT, user_id TEXT, display_name TEXT, bio TEXT, previous_bio TEXT)`
+         );
+diff --git a/src/shared/constants/dashboard.js b/src/shared/constants/dashboard.js
+index 193019a4..2185d7af 100644
+--- a/src/shared/constants/dashboard.js
++++ b/src/shared/constants/dashboard.js
+@@ -9,5 +9,6 @@ export const DASHBOARD_BLOCKED_PANEL_KEYS = new Set([
+     'charts-mutual',
+     'charts-hot-worlds',
+     'charts-friend-footprints',
++    'charts-friend-status-lights',
+     'tools'
+ ]);
+diff --git a/src/shared/constants/ui.js b/src/shared/constants/ui.js
+index 9b834e7c..86ae9996 100644
+--- a/src/shared/constants/ui.js
++++ b/src/shared/constants/ui.js
+@@ -120,6 +120,13 @@ const navDefinitions = [
+         labelKey: 'view.charts.friend_footprints.tab_label',
+         routeName: 'charts-friend-footprints'
+     },
++    {
++        key: 'charts-friend-status-lights',
++        icon: 'ri-traffic-light-line',
++        tooltip: 'view.charts.friend_status_lights.tab_label',
++        labelKey: 'view.charts.friend_status_lights.tab_label',
++        routeName: 'charts-friend-status-lights'
++    },
+     {
+         key: 'tools',
+         icon: 'ri-tools-line',
+diff --git a/src/shared/utils/__tests__/friendStatusLights.test.js b/src/shared/utils/__tests__/friendStatusLights.test.js
+new file mode 100644
+index 00000000..b18d21a3
+--- /dev/null
++++ b/src/shared/utils/__tests__/friendStatusLights.test.js
+@@ -0,0 +1,458 @@
++import { describe, expect, test } from 'vitest';
++
++import {
++    DEFAULT_MAX_GAP_MS,
++    buildStatusIntervals,
++    normalizeStatusEvents,
++    statusDescriptionChanges,
++    statusLightDays,
++    statusLightHours,
++    statusLightShares,
++    summarizeStatusLights,
++    toneForLight
++} from '../friendStatusLights';
++
++const MINUTE = 60 * 1000;
++const HOUR = 60 * MINUTE;
++
++/**
++ * Local-time ISO string, so tests that care about days and hours do not depend on
++ * the machine timezone.
++ *
++ * @param {number} year
++ * @param {number} month - Zero based, as Date expects
++ * @param {number} day
++ * @param {number} hour
++ * @param {number} minute
++ * @returns {string}
++ */
++function localIso(year, month, day, hour, minute = 0) {
++    return new Date(year, month, day, hour, minute, 0, 0).toISOString();
++}
++
++/**
++ * A fixed UTC reference point for the tests that only compare relative offsets.
++ *
++ * @param {number} offsetMs
++ * @returns {string}
++ */
++function at(offsetMs) {
++    return new Date(Date.UTC(2026, 7, 20, 10, 0, 0) + offsetMs).toISOString();
++}
++
++function statusRow(offsetMs, light, extra = {}) {
++    return {
++        created_at: at(offsetMs),
++        status: light,
++        status_description: extra.description || '',
++        previous_status: extra.previous || '',
++        previous_status_description: extra.previousDescription || ''
++    };
++}
++
++function presenceRow(offsetMs, type) {
++    return { created_at: at(offsetMs), type };
++}
++
++describe('normalizeStatusEvents', () => {
++    test('merges both feeds in time order with presence first on a tie', () => {
++        const events = normalizeStatusEvents(
++            [statusRow(MINUTE, 'busy', { previous: 'active' })],
++            [presenceRow(MINUTE, 'Online'), presenceRow(0, 'Offline')]
++        );
++
++        expect(events.map((event) => event.order)).toEqual([0, 0, 1]);
++        expect(events[2]).toMatchObject({ light: 'busy', previousLight: 'active' });
++    });
++
++    test('drops rows with an unusable time, a poisoned type or a non light status', () => {
++        const events = normalizeStatusEvents(
++            [
++                { created_at: 'not-a-date', status: 'active' },
++                statusRow(0, 'offline'),
++                statusRow(0, ''),
++                statusRow(0, 'wat')
++            ],
++            [presenceRow(0, 'Maybe'), { created_at: at(0), type: 'Online' }]
++        );
++
++        expect(events).toHaveLength(1);
++        expect(events[0]).toMatchObject({ online: true });
++    });
++});
++
++describe('buildStatusIntervals', () => {
++    test('splits the timeline on offline and resumes with the next online', () => {
++        const intervals = buildStatusIntervals(
++            [statusRow(10 * MINUTE, 'active')],
++            [presenceRow(0, 'Online'), presenceRow(HOUR, 'Offline'), presenceRow(2 * HOUR, 'Online')],
++            { now: Date.parse(at(3 * HOUR)) }
++        );
++
++        expect(intervals).toHaveLength(4);
++        expect(intervals[0]).toMatchObject({ online: true, light: null, durationMs: 10 * MINUTE });
++        expect(intervals[1]).toMatchObject({ online: true, light: 'active', known: true });
++        expect(intervals[2]).toMatchObject({ online: false, light: null, startAt: Date.parse(at(HOUR)) });
++        expect(intervals[3]).toMatchObject({ online: true, light: null, known: false });
++    });
++
++    test('collapses the repeated presence rows the table is full of', () => {
++        const intervals = buildStatusIntervals(
++            [],
++            [
++                presenceRow(0, 'Online'),
++                presenceRow(10 * MINUTE, 'Online'),
++                presenceRow(20 * MINUTE, 'Online'),
++                presenceRow(HOUR, 'Offline'),
++                presenceRow(2 * HOUR, 'Offline')
++            ],
++            { now: Date.parse(at(3 * HOUR)) }
++        );
++
++        // one online stretch then one offline stretch, with no flapping in between
++        expect(intervals.map((interval) => interval.online)).toEqual([true, false]);
++    });
++
++    test('treats a status change as proof the player was online', () => {
++        const intervals = buildStatusIntervals(
++            [statusRow(MINUTE, 'ask me', { previous: 'active' })],
++            [presenceRow(0, 'Online'), presenceRow(MINUTE, 'Offline')],
++            { now: Date.parse(at(HOUR)) }
++        );
++
++        // presence says offline straight after, but the change still opened a session
++        const last = intervals[intervals.length - 1];
++        expect(last).toMatchObject({ online: true, light: 'ask me', known: true });
++    });
++
++    test('fills the stretch before a session first change from previous_status', () => {
++        const intervals = buildStatusIntervals(
++            [statusRow(10 * MINUTE, 'busy', { previous: 'ask me' })],
++            [presenceRow(0, 'Online')],
++            { now: Date.parse(at(HOUR)) }
++        );
++
++        expect(intervals[0]).toMatchObject({
++            light: 'ask me',
++            known: false,
++            inferred: true,
++            startAt: Date.parse(at(0)),
++            endAt: Date.parse(at(10 * MINUTE))
++        });
++    });
++
++    test('leaves an online stretch unknown when no change ever recorded a light', () => {
++        const intervals = buildStatusIntervals([], [presenceRow(0, 'Online'), presenceRow(HOUR, 'Offline')], {
++            now: Date.parse(at(2 * HOUR))
++        });
++
++        expect(intervals[0]).toMatchObject({ online: true, light: null, inferred: false, known: false });
++    });
++
++    test('does not reach back across an offline stretch to fill a light in', () => {
++        const intervals = buildStatusIntervals(
++            [statusRow(10 * MINUTE, 'active'), statusRow(5 * HOUR, 'busy', { previous: 'active' })],
++            [presenceRow(0, 'Online'), presenceRow(HOUR, 'Offline')],
++            { now: Date.parse(at(6 * HOUR)) }
++        );
++
++        // the four hours before the unseen login stay offline rather than inheriting active
++        expect(intervals[2]).toMatchObject({ online: false, light: null, inferred: false });
++        expect(intervals[3]).toMatchObject({ online: true, light: 'busy' });
++    });
++
++    test('trusts a long stretch that both of its ends witness', () => {
++        const intervals = buildStatusIntervals(
++            [statusRow(HOUR, 'active'), statusRow(3 * 24 * HOUR, 'busy', { previous: 'active' })],
++            [presenceRow(0, 'Online')],
++            { now: Date.parse(at(3 * 24 * HOUR + HOUR)) }
++        );
++
++        // three days in one light is ordinary and produces no rows of its own, so a
++        // stretch closed by two real events is taken at face value
++        expect(intervals[1]).toMatchObject({ light: 'active', reliable: true, durationMs: 71 * HOUR });
++    });
++
++    test('refuses to attribute the trailing stretch once it exceeds the gap limit', () => {
++        const intervals = buildStatusIntervals([statusRow(MINUTE, 'active')], [presenceRow(0, 'Online')], {
++            now: Date.parse(at(20 * HOUR))
++        });
++
++        // nothing closes the session, so a twenty hour tail is not trusted
++        expect(intervals[0].reliable).toBe(true);
++        expect(intervals.at(-1)).toMatchObject({ reliable: false, durationMs: 0 });
++    });
++
++    test('honours a custom gap limit', () => {
++        const intervals = buildStatusIntervals([], [presenceRow(0, 'Online')], {
++            now: Date.parse(at(2 * HOUR)),
++            maxGapMs: HOUR
++        });
++
++        expect(intervals[0].durationMs).toBe(0);
++        expect(DEFAULT_MAX_GAP_MS).toBe(12 * HOUR);
++    });
++
++    test('tolerates junk input', () => {
++        const now = Date.parse(at(HOUR));
++        expect(buildStatusIntervals([], [], { now })).toEqual([]);
++        expect(buildStatusIntervals(null, null, { now })).toEqual([]);
++        expect(buildStatusIntervals([{ created_at: 'x', status: 'active' }], [], { now })).toEqual([]);
++    });
++});
++
++describe('a changed status description is not a light change', () => {
++    /**
++     * A feed_status row where the light is unchanged but its custom text moved is a
++     * real edit that cannot be told apart from a genuine light switch by looking at
++     * `status` alone. Cutting the light interval there would invent a switch and
++     * chop the run in half, so it is covered on its own.
++     *
++     * @returns {object[]}
++     */
++    function descriptionOnlyRows() {
++        return [
++            statusRow(MINUTE, 'active', { description: 'aaa' }),
++            statusRow(30 * MINUTE, 'active', {
++                description: 'bbb',
++                previous: 'active',
++                previousDescription: 'aaa'
++            }),
++            statusRow(45 * MINUTE, 'active', {
++                description: 'ccc',
++                previous: 'active',
++                previousDescription: 'bbb'
++            })
++        ];
++    }
++
++    test('keeps one continuous run across the edits', () => {
++        const intervals = buildStatusIntervals(
++            descriptionOnlyRows(),
++            [presenceRow(0, 'Online'), presenceRow(HOUR, 'Offline')],
++            { now: Date.parse(at(2 * HOUR)) }
++        );
++
++        const lit = intervals.filter((interval) => interval.light === 'active');
++        expect(lit.length).toBeGreaterThan(1);
++        expect(lit.every((interval) => interval.known)).toBe(true);
++
++        const summary = summarizeStatusLights(intervals);
++        expect(summary.lights.active.runs).toBe(1);
++        expect(summary.switches).toBe(0);
++        expect(summary.lights.active.longestMs).toBe(59 * MINUTE);
++        expect(summary.lights.active.observedMs).toBe(59 * MINUTE);
++    });
++
++    test('is reported separately as a description change', () => {
++        const changes = statusDescriptionChanges(descriptionOnlyRows(), { onlySameLight: true });
++
++        expect(changes).toHaveLength(2);
++        expect(changes.map((change) => change.description)).toEqual(['ccc', 'bbb']);
++        expect(changes[0]).toMatchObject({ light: 'active', previousDescription: 'bbb', lightChanged: false });
++    });
++
++    test('is left out of the count when a light change also moved the text', () => {
++        const rows = [
++            statusRow(0, 'active', { description: 'a' }),
++            statusRow(HOUR, 'busy', { description: 'b', previous: 'active', previousDescription: 'a' })
++        ];
++
++        expect(statusDescriptionChanges(rows, { onlySameLight: true })).toHaveLength(0);
++        expect(statusDescriptionChanges(rows)).toHaveLength(2);
++        expect(statusDescriptionChanges(rows)[0].lightChanged).toBe(true);
++    });
++
++    test('ignores rows whose text did not move at all', () => {
++        const rows = [statusRow(0, 'busy', { description: 'same', previous: 'busy', previousDescription: 'same' })];
++
++        expect(statusDescriptionChanges(rows)).toEqual([]);
++    });
++});
++
++describe('summarizeStatusLights', () => {
++    /**
++     * @returns {object[]}
++     */
++    function sampleIntervals() {
++        return buildStatusIntervals(
++            [
++                statusRow(10 * MINUTE, 'busy', { previous: 'active' }),
++                statusRow(40 * MINUTE, 'active', { previous: 'busy' })
++            ],
++            [presenceRow(0, 'Online'), presenceRow(HOUR, 'Offline')],
++            { now: Date.parse(at(2 * HOUR)) }
++        );
++    }
++
++    test('splits time into the buckets the page reports separately', () => {
++        const summary = summarizeStatusLights(sampleIntervals());
++
++        expect(summary.observedMs).toBe(50 * MINUTE);
++        expect(summary.inferredMs).toBe(10 * MINUTE);
++        expect(summary.offlineMs).toBe(HOUR);
++        expect(summary.unknownOnlineMs).toBe(0);
++        expect(summary.spanMs).toBe(2 * HOUR);
++    });
++
++    test('counts switches between lights but not logins', () => {
++        const summary = summarizeStatusLights(sampleIntervals());
++
++        // active -> busy -> active is two changes, and the session opening is not one
++        expect(summary.switches).toBe(2);
++        expect(summary.lights.busy.runs).toBe(1);
++        expect(summary.lights.active.runs).toBe(2);
++    });
++
++    test('averages the hold time over the runs of that light', () => {
++        const summary = summarizeStatusLights(sampleIntervals());
++
++        // busy was held once for 30m; active was held twice, 10m inferred then 20m seen
++        expect(summary.lights.busy.averageMs).toBe(30 * MINUTE);
++        expect(summary.lights.active.averageMs).toBe(15 * MINUTE);
++    });
++
++    test('reports zeroes for an empty history', () => {
++        const summary = summarizeStatusLights([]);
++
++        expect(summary).toMatchObject({ observedMs: 0, inferredMs: 0, offlineMs: 0, switches: 0, days: 0 });
++        expect(summary.lights.active.runs).toBe(0);
++        expect(summarizeStatusLights(null).observedMs).toBe(0);
++    });
++});
++
++describe('statusLightShares', () => {
++    test('divides by observed time only unless inference is asked for', () => {
++        const summary = summarizeStatusLights(
++            buildStatusIntervals(
++                [
++                    statusRow(10 * MINUTE, 'busy', { previous: 'ask me' }),
++                    statusRow(50 * MINUTE, 'busy', { previous: 'busy', description: 'edited' })
++                ],
++                [presenceRow(0, 'Online')],
++                { now: Date.parse(at(HOUR)) }
++            )
++        );
++        const plain = statusLightShares(summary);
++        const withInferred = statusLightShares(summary, { includeInferred: true });
++
++        expect(plain.totalMs).toBe(50 * MINUTE);
++        expect(plain.rows.find((row) => row.light === 'busy').share).toBe(1);
++        expect(plain.rows.find((row) => row.light === 'ask me').share).toBe(0);
++
++        expect(withInferred.totalMs).toBe(HOUR);
++        const inferred = withInferred.rows.find((row) => row.light === 'ask me');
++        expect(inferred.ms).toBe(10 * MINUTE);
++        expect(inferred.share).toBeCloseTo(10 / 60, 5);
++    });
++
++    test('always sums to one and reports a tone for each light', () => {
++        const summary = summarizeStatusLights(
++            buildStatusIntervals(
++                [
++                    statusRow(MINUTE, 'active', { previous: 'ask me' }),
++                    statusRow(30 * MINUTE, 'busy', { previous: 'active' }),
++                    statusRow(45 * MINUTE, 'join me', { previous: 'busy' })
++                ],
++                [presenceRow(0, 'Online')],
++                { now: Date.parse(at(HOUR)) }
++            )
++        );
++        const shares = statusLightShares(summary);
++
++        expect(shares.rows).toHaveLength(4);
++        expect(shares.rows.reduce((total, row) => total + row.share, 0)).toBeCloseTo(1, 10);
++        expect(shares.rows.map((row) => row.tone)).toEqual(['online', 'joinme', 'askme', 'busy']);
++    });
++
++    test('reports zero shares when nothing was observed', () => {
++        const shares = statusLightShares(summarizeStatusLights([]));
++
++        expect(shares.totalMs).toBe(0);
++        expect(shares.rows.every((row) => row.share === 0)).toBe(true);
++    });
++
++    test('maps every light onto a known style tone', () => {
++        expect(toneForLight('active')).toBe('online');
++        expect(toneForLight('offline')).not.toBe('online');
++    });
++});
++
++describe('statusLightDays', () => {
++    test('splits an interval at local midnight and lists newest day first', () => {
++        const intervals = buildStatusIntervals(
++            [{ created_at: localIso(2026, 8, 15, 23, 1), status: 'active', previous_status: '' }],
++            [
++                { created_at: localIso(2026, 8, 15, 23, 0), type: 'Online' },
++                { created_at: localIso(2026, 8, 16, 1, 0), type: 'Offline' }
++            ],
++            { now: new Date(2026, 8, 16, 2, 0).getTime() }
++        );
++        const days = statusLightDays(intervals);
++
++        expect(days[0].dateKey).toBe(new Date(2026, 8, 16).toLocaleDateString('sv'));
++        expect(days[1].dateKey).toBe(new Date(2026, 8, 15).toLocaleDateString('sv'));
++        expect(days[1].segments.at(-1)).toMatchObject({ light: 'active', continuesInto: true });
++        expect(days[0].segments[0]).toMatchObject({ light: 'active', continuesFrom: true });
++    });
++
++    test('respects the day limit', () => {
++        const intervals = buildStatusIntervals(
++            [],
++            [
++                { created_at: localIso(2026, 8, 15, 10, 0), type: 'Online' },
++                { created_at: localIso(2026, 8, 15, 11, 0), type: 'Offline' },
++                { created_at: localIso(2026, 8, 16, 10, 0), type: 'Online' }
++            ],
++            { now: new Date(2026, 8, 16, 11, 0).getTime() }
++        );
++
++        expect(statusLightDays(intervals, 1)).toHaveLength(1);
++        expect(statusLightDays(intervals, Number.POSITIVE_INFINITY).length).toBe(2);
++    });
++
++    test('returns nothing for no intervals', () => {
++        expect(statusLightDays([], 5)).toEqual([]);
++        expect(statusLightDays(null, 5)).toEqual([]);
++    });
++});
++
++describe('statusLightHours', () => {
++    test('buckets observed time into the local hour it was spent in', () => {
++        const intervals = buildStatusIntervals(
++            [{ created_at: localIso(2026, 8, 15, 12, 1), status: 'active', previous_status: '' }],
++            [
++                { created_at: localIso(2026, 8, 15, 12, 0), type: 'Online' },
++                { created_at: localIso(2026, 8, 15, 13, 0), type: 'Offline' }
++            ],
++            { now: new Date(2026, 8, 15, 14, 0).getTime() }
++        );
++        const { hours, totals, maxHourMs } = statusLightHours(intervals);
++
++        expect(hours).toHaveLength(24);
++        expect(hours[12].active).toBe(59 * MINUTE);
++        expect(totals.active).toBe(59 * MINUTE);
++        expect(maxHourMs).toBe(59 * MINUTE);
++    });
++
++    test('leaves out stretches the gap rule refused to trust', () => {
++        const intervals = buildStatusIntervals(
++            [{ created_at: localIso(2026, 8, 15, 12, 1), status: 'active', previous_status: '' }],
++            [{ created_at: localIso(2026, 8, 15, 12, 0), type: 'Online' }],
++            { now: new Date(2026, 8, 16, 10, 0).getTime() }
++        );
++        const { hours, totals } = statusLightHours(intervals);
++
++        // the tail runs past the gap limit, so none of it is attributed to hour 12
++        expect(intervals.at(-1).reliable).toBe(false);
++        expect(hours[12].active ?? 0).toBe(0);
++        expect(totals.active ?? 0).toBe(0);
++    });
++
++    test('returns an all zero grid for no intervals', () => {
++        const { hours, maxHourMs } = statusLightHours([]);
++
++        expect(hours.every((bucket) => Object.keys(bucket).length === 0)).toBe(true);
++        expect(maxHourMs).toBe(1);
++    });
++});
+diff --git a/src/shared/utils/friendStatusLights.js b/src/shared/utils/friendStatusLights.js
+new file mode 100644
+index 00000000..3cfed44f
+--- /dev/null
++++ b/src/shared/utils/friendStatusLights.js
+@@ -0,0 +1,533 @@
++/**
++ * Turns raw feed_status and feed_online_offline rows into a timeline of status
++ * light intervals and aggregates them for the friend status light dashboard.
++ *
++ * A feed_status row means: "at created_at the player's status became `status`,
++ * having been `previous_status`". Two things about that table are easy to get
++ * wrong and both are load bearing here:
++ *
++ * 1. A row where status === previous_status is NOT noise. VRChat lets a player attach custom text to a light, and the only
++ *    trace of an edit is a row whose light is unchanged while the description moved. Those rows are kept as description
++ *    changes and must not cut the current light's interval in half.
++ * 2. `previous_status` describes the stretch immediately before the row, which reaches back to the start of the current
++ *    online session. So the first change of a session is what tells us which light was on before it. Filling that in is
++ *    the one inference this module makes, and it is flagged as such.
++ *
++ * No further inference is done. Measuring the real database showed that when two
++ * observations are under an hour apart the light differs 92% of the time, so
++ * carrying a light across an unobserved stretch would be wrong exactly where it
++ * matters most; those stretches stay `unknown` instead.
++ *
++ * Online state comes from feed_online_offline, which repeats itself (adjacent
++ * same-type rows) and lags behind status changes, so a status change is treated
++ * as proof that the player was online regardless of what presence says.
++ */
++
++const HOUR_MS = 60 * 60 * 1000;
++
++// A stretch longer than this means VRCX was closed or the player was gone, so the
++// time inside it cannot be attributed to any light.
++const DEFAULT_MAX_GAP_MS = 12 * HOUR_MS;
++
++const STATUS_LIGHTS = ['active', 'join me', 'ask me', 'busy'];
++
++// Maps a VRChat status onto the class names used by styles/status-icon.css
++// (`i.x-user-status.online` and friends) and onto the --status-* colour variables.
++const STATUS_LIGHT_META = [
++    { light: 'active', tone: 'online', colour: 'var(--status-online)' },
++    { light: 'join me', tone: 'joinme', colour: 'var(--status-joinme)' },
++    { light: 'ask me', tone: 'askme', colour: 'var(--status-askme)' },
++    { light: 'busy', tone: 'busy', colour: 'var(--status-busy)' }
++];
++
++const OFFLINE_TONE = 'offline';
++const UNKNOWN_TONE = 'unknown';
++
++/**
++ * @param {string} iso
++ * @returns {number} Epoch ms, or 0 when unparseable
++ */
++function toEpoch(iso) {
++    const value = Date.parse(iso);
++    return Number.isNaN(value) ? 0 : value;
++}
++
++/**
++ * @param {unknown} status
++ * @returns {string} A known light, or an empty string
++ */
++function normalizeLight(status) {
++    const value = String(status || '').trim();
++    return STATUS_LIGHTS.includes(value) ? value : '';
++}
++
++/**
++ * @param {string} light
++ * @returns {string} The style class suffix for a light
++ */
++function toneForLight(light) {
++    const meta = STATUS_LIGHT_META.find((entry) => entry.light === light);
++    return meta ? meta.tone : UNKNOWN_TONE;
++}
++
++/**
++ * Merge both feeds into one ordered event list.
++ *
++ * Presence events sort before status events at the same timestamp so that a
++ * change landing on the same millisecond as the online event still wins the
++ * final state.
++ *
++ * @param {object[]} statusRows - Feed_status rows
++ * @param {object[]} presenceRows - Feed_online_offline rows
++ * @returns {object[]} Events ascending by time
++ */
++function normalizeStatusEvents(statusRows, presenceRows) {
++    const events = [];
++    for (const row of presenceRows || []) {
++        const at = toEpoch(row.created_at);
++        const type = String(row.type || '');
++        if (!at || (type !== 'Online' && type !== 'Offline')) {
++            continue;
++        }
++        events.push({ at, order: 0, online: type === 'Online' });
++    }
++    for (const row of statusRows || []) {
++        const at = toEpoch(row.created_at);
++        const light = normalizeLight(row.status);
++        if (!at || !light) {
++            continue;
++        }
++        events.push({
++            at,
++            order: 1,
++            light,
++            description: String(row.status_description || ''),
++            previousLight: normalizeLight(row.previous_status),
++            previousDescription: String(row.previous_status_description || '')
++        });
++    }
++    events.sort((a, b) => a.at - b.at || a.order - b.order);
++    return events;
++}
++
++/**
++ * Build the interval timeline for one player.
++ *
++ * Intervals run back to back from the first event to `now`. An interval with
++ * `online` false is an offline stretch, `light === null` with `online` true is an
++ * online stretch whose light was never recorded, and `inferred` marks the single
++ * case we fill in from `previous_status`.
++ *
++ * Neighbouring intervals in the same state are merged, so the result is a run of
++ * maximal constant-state stretches rather than one entry per raw row.
++ *
++ * A stretch between two recorded events is taken at face value however long it is:
++ * both of its ends are things VRCX actually saw, and for status the long ones are
++ * ordinary, because a light that simply stays put produces no rows at all. Only the
++ * trailing stretch - from the last event to now - is capped, since there is no
++ * second witness to say the state still holds.
++ *
++ * @param {object[]} statusRows - Feed_status rows for one user
++ * @param {object[]} presenceRows - Feed_online_offline rows for the same user
++ * @param {{ now?: number; maxGapMs?: number }} [options]
++ * @returns {object[]} Intervals, oldest first
++ */
++function buildStatusIntervals(statusRows, presenceRows, options = {}) {
++    const now = Number(options.now) || Date.now();
++    const maxGapMs = Number(options.maxGapMs) || DEFAULT_MAX_GAP_MS;
++    const events = normalizeStatusEvents(statusRows, presenceRows);
++
++    const intervals = [];
++    let online = false;
++    let light = '';
++    let description = '';
++    let since = null;
++
++    /**
++     * @param {number} endAt
++     * @param {boolean} open - True for the trailing stretch that no event closes
++     */
++    const push = (endAt, open) => {
++        if (since === null || endAt <= since) {
++            return;
++        }
++        const gapMs = endAt - since;
++        const reliable = open ? gapMs <= maxGapMs : true;
++        const last = intervals[intervals.length - 1];
++        if (
++            last &&
++            last.reliable === reliable &&
++            last.online === online &&
++            last.light === (light || null) &&
++            last.description === description
++        ) {
++            last.endAt = endAt;
++            last.durationMs = last.reliable ? last.endAt - last.startAt : 0;
++            return;
++        }
++        intervals.push({
++            startAt: since,
++            endAt,
++            online,
++            light: light || null,
++            description,
++            known: Boolean(online && light),
++            inferred: false,
++            reliable,
++            durationMs: reliable ? gapMs : 0
++        });
++    };
++
++    for (const event of events) {
++        push(event.at, false);
++        if (event.light) {
++            // The stretch that just closed was spent in what this change moved away
++            // from. Only the stretch that actually ended here qualifies, which is why
++            // the end is compared rather than just taking the last interval.
++            const last = intervals[intervals.length - 1];
++            if (last && last.endAt === event.at && last.online && !last.light && event.previousLight) {
++                last.light = event.previousLight;
++                last.known = false;
++                last.inferred = true;
++                last.description = event.previousDescription;
++            }
++            // A status change is proof of being online even when presence disagrees.
++            online = true;
++            light = event.light;
++            description = event.description;
++        } else {
++            online = event.online;
++            light = '';
++            description = '';
++        }
++        since = event.at;
++    }
++    push(now, true);
++    return intervals;
++}
++
++/**
++ * Headline numbers for the dashboard.
++ *
++ * `observedMs` covers time where a light was actually recorded and is the only
++ * denominator the shares should use. The remaining buckets exist so the page can
++ * say how much of the record the percentages leave out, rather than quietly
++ * implying they cover everything.
++ *
++ * Per light, `runs` counts the separate stretches it was worn for and `switches`
++ * counts only changes from one known light to another, so a login does not inflate
++ * either of them.
++ *
++ * @param {object[]} intervals
++ * @returns {object}
++ */
++function summarizeStatusLights(intervals) {
++    const list = intervals || [];
++    const lights = {};
++    for (const light of STATUS_LIGHTS) {
++        lights[light] = {
++            light,
++            tone: toneForLight(light),
++            observedMs: 0,
++            inferredMs: 0,
++            runs: 0,
++            longestMs: 0,
++            averageMs: 0
++        };
++    }
++
++    let observedMs = 0;
++    let inferredMs = 0;
++    let unknownOnlineMs = 0;
++    let offlineMs = 0;
++    let reliableMs = 0;
++    let switches = 0;
++
++    // A run is consecutive time in one light. It ends whenever the light changes or
++    // the player stops being observable, so a light re-entered later counts twice.
++    let runLight = '';
++    let runMs = 0;
++    let lastLight = '';
++    const days = new Set();
++
++    const closeRun = () => {
++        const bucket = lights[runLight];
++        if (bucket && runMs > bucket.longestMs) {
++            bucket.longestMs = runMs;
++        }
++        runLight = '';
++        runMs = 0;
++    };
++
++    for (const interval of list) {
++        reliableMs += interval.durationMs;
++
++        if (!interval.online || !interval.light) {
++            if (interval.online) {
++                unknownOnlineMs += interval.durationMs;
++            } else {
++                offlineMs += interval.durationMs;
++            }
++            closeRun();
++            lastLight = '';
++            continue;
++        }
++
++        const bucket = lights[interval.light];
++        if (!bucket) {
++            continue;
++        }
++        if (interval.startAt) {
++            days.add(new Date(interval.startAt).toLocaleDateString('sv'));
++        }
++        if (interval.known) {
++            observedMs += interval.durationMs;
++            bucket.observedMs += interval.durationMs;
++        } else {
++            inferredMs += interval.durationMs;
++            bucket.inferredMs += interval.durationMs;
++        }
++        if (lastLight !== interval.light) {
++            closeRun();
++            bucket.runs++;
++            // Coming back from offline or from an unrecorded stretch is not a switch:
++            // that is just the light they were already wearing. Only a change from one
++            // known light to another counts.
++            if (lastLight) {
++                switches++;
++            }
++            lastLight = interval.light;
++            runLight = interval.light;
++        }
++        runMs += interval.durationMs;
++    }
++    closeRun();
++
++    for (const bucket of Object.values(lights)) {
++        const holdMs = bucket.observedMs + bucket.inferredMs;
++        bucket.averageMs = bucket.runs ? Math.round(holdMs / bucket.runs) : 0;
++    }
++
++    const firstAt = list.length ? list[0].startAt : 0;
++    const lastAt = list.length ? list[list.length - 1].endAt : 0;
++    const spanMs = firstAt ? lastAt - firstAt : 0;
++
++    return {
++        firstAt,
++        lastAt,
++        spanMs,
++        observedMs,
++        inferredMs,
++        unknownOnlineMs,
++        offlineMs,
++        // everything the gap rule refused to attribute: VRCX was not running
++        unrecordedMs: Math.max(0, spanMs - reliableMs),
++        recordedMs: reliableMs,
++        switches,
++        days: days.size,
++        lights
++    };
++}
++
++/**
++ * The four way split the page draws.
++ *
++ * The denominator follows the chosen mode, so the shares always describe the
++ * series they are drawn from. Inferred time is only ever admitted when asked for,
++ * and the caller is expected to mark it as an estimate on screen.
++ *
++ * @param {object} summary - From summarizeStatusLights
++ * @param {{ includeInferred?: boolean }} [options]
++ * @returns {{ rows: object[]; totalMs: number; includeInferred: boolean }}
++ */
++function statusLightShares(summary, options = {}) {
++    const includeInferred = options.includeInferred === true;
++    const stats = (summary && summary.lights) || {};
++    let totalMs = 0;
++    const raw = STATUS_LIGHTS.map((light) => {
++        const bucket = stats[light] || { observedMs: 0, inferredMs: 0 };
++        const ms = includeInferred ? bucket.observedMs + bucket.inferredMs : bucket.observedMs;
++        totalMs += ms;
++        return { light, ms };
++    });
++    return {
++        includeInferred,
++        totalMs,
++        rows: raw.map((row) => ({
++            ...row,
++            share: totalMs ? row.ms / totalMs : 0,
++            tone: toneForLight(row.light)
++        }))
++    };
++}
++
++/**
++ * Split one interval at local midnight so it can be drawn inside a single day.
++ *
++ * @param {object} interval
++ * @returns {object[]}
++ */
++function splitIntervalByDay(interval) {
++    const parts = [];
++    let cursor = interval.startAt;
++    while (cursor < interval.endAt) {
++        const date = new Date(cursor);
++        let next = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1, 0, 0, 0, 0).getTime();
++        if (!(next > cursor)) {
++            // A DST jump can make the next midnight land on or before the cursor.
++            next = cursor + HOUR_MS;
++        }
++        const end = Math.min(next, interval.endAt);
++        const durationMs = end - cursor;
++        parts.push({
++            ...interval,
++            startAt: cursor,
++            endAt: end,
++            durationMs: interval.reliable ? durationMs : 0,
++            continuesFrom: cursor !== interval.startAt,
++            continuesInto: end !== interval.endAt
++        });
++        cursor = end;
++    }
++    return parts;
++}
++
++/**
++ * Intervals grouped under local calendar days, newest day first.
++ *
++ * @param {object[]} intervals
++ * @param {number} [limit] - Maximum number of days to return
++ * @returns {{ dateKey: string; timestamp: number; segments: object[]; observedMs: number }[]}
++ */
++function statusLightDays(intervals, limit = 14) {
++    const buckets = new Map();
++    // oldest first, so segments inside a day read left to right
++    for (const interval of intervals || []) {
++        if (!interval.startAt) {
++            continue;
++        }
++        for (const part of splitIntervalByDay(interval)) {
++            const date = new Date(part.startAt);
++            const dateKey = date.toLocaleDateString('sv');
++            if (!buckets.has(dateKey)) {
++                buckets.set(dateKey, {
++                    dateKey,
++                    timestamp: new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime(),
++                    segments: [],
++                    observedMs: 0
++                });
++            }
++            const bucket = buckets.get(dateKey);
++            bucket.segments.push({
++                ...part,
++                tone: part.online ? toneForLight(part.light) : OFFLINE_TONE
++            });
++            if (part.known) {
++                bucket.observedMs += part.durationMs;
++            }
++        }
++    }
++    const days = [...buckets.values()].sort((a, b) => b.timestamp - a.timestamp);
++    return Number.isFinite(limit) ? days.slice(0, limit) : days;
++}
++
++/**
++ * Time spent in each light by hour of the local day, for the "what does this
++ * player tend to wear at 9pm" strip.
++ *
++ * @param {object[]} intervals
++ * @returns {{ hours: object[]; totals: Record<string, number>; maxHourMs: number }}
++ */
++function statusLightHours(intervals) {
++    const hours = Array.from({ length: 24 }, () => ({}));
++    const totals = {};
++    let maxHourMs = 0;
++
++    for (const interval of intervals || []) {
++        if (!interval.online || !interval.light || !interval.reliable) {
++            continue;
++        }
++        let cursor = interval.startAt;
++        while (cursor < interval.endAt) {
++            const date = new Date(cursor);
++            const hour = date.getHours();
++            let next = new Date(date.getFullYear(), date.getMonth(), date.getDate(), hour + 1, 0, 0, 0).getTime();
++            if (!(next > cursor)) {
++                next = cursor + HOUR_MS;
++            }
++            const end = Math.min(next, interval.endAt);
++            const slice = end - cursor;
++            hours[hour][interval.light] = (hours[hour][interval.light] || 0) + slice;
++            totals[interval.light] = (totals[interval.light] || 0) + slice;
++            cursor = end;
++        }
++    }
++    // The strip scales every hour column against the busiest one, so this is the
++    // largest single hour rather than the largest per light total.
++    for (const bucket of hours) {
++        const sum = Object.values(bucket).reduce((total, ms) => total + ms, 0);
++        if (sum > maxHourMs) {
++            maxHourMs = sum;
++        }
++    }
++    return { hours, totals, maxHourMs: maxHourMs || 1 };
++}
++
++/**
++ * Edits to the custom text attached to a light, newest first.
++ *
++ * Rows where the light also changed are labelled so the caller can show them
++ * separately or leave them out.
++ *
++ * @param {object[]} rows - Feed_status rows for one user
++ * @param {{ limit?: number; onlySameLight?: boolean }} [options]
++ * @returns {object[]}
++ */
++function statusDescriptionChanges(rows, options = {}) {
++    const limit = Number.isFinite(options.limit) ? options.limit : 60;
++    const onlySameLight = options.onlySameLight === true;
++    const changes = [];
++    for (const row of rows || []) {
++        const light = normalizeLight(row.status);
++        const at = toEpoch(row.created_at);
++        if (!at || !light) {
++            continue;
++        }
++        const description = String(row.status_description || '');
++        const previousDescription = String(row.previous_status_description || '');
++        if (description === previousDescription) {
++            continue;
++        }
++        const previousLight = String(row.previous_status || '').trim();
++        if (onlySameLight && previousLight !== light) {
++            continue;
++        }
++        changes.push({
++            at,
++            light,
++            tone: toneForLight(light),
++            description,
++            previousDescription,
++            lightChanged: previousLight !== light
++        });
++    }
++    changes.sort((a, b) => b.at - a.at || a.description.localeCompare(b.description));
++    return changes.slice(0, limit);
++}
++
++export {
++    DEFAULT_MAX_GAP_MS,
++    OFFLINE_TONE,
++    STATUS_LIGHTS,
++    STATUS_LIGHT_META,
++    UNKNOWN_TONE,
++    buildStatusIntervals,
++    normalizeStatusEvents,
++    splitIntervalByDay,
++    statusDescriptionChanges,
++    statusLightDays,
++    statusLightHours,
++    statusLightShares,
++    summarizeStatusLights,
++    toneForLight
++};
+diff --git a/src/shared/utils/index.js b/src/shared/utils/index.js
+index ad761299..fc38c10c 100644
+--- a/src/shared/utils/index.js
++++ b/src/shared/utils/index.js
+@@ -12,6 +12,7 @@ export * from './csv';
+ export * from './fileUtils';
+ export * from './friend';
+ export * from './friendFootprints';
++export * from './friendStatusLights';
+ export * from './group';
+ export * from './instance';
+ export * from './platformUtils';
+diff --git a/src/stores/settings/appearance.js b/src/stores/settings/appearance.js
+index 342e371d..983aab11 100644
+--- a/src/stores/settings/appearance.js
++++ b/src/stores/settings/appearance.js
+@@ -112,7 +112,8 @@ export const useAppearanceSettingsStore = defineStore(
+                 'charts-instance',
+                 'charts-mutual',
+                 'charts-hot-worlds',
+-                'charts-friend-footprints'
++                'charts-friend-footprints',
++                'charts-friend-status-lights'
+             ].includes(currentRouteName);
+         });
+ 
+diff --git a/src/views/Charts/components/FriendStatusLights.vue b/src/views/Charts/components/FriendStatusLights.vue
+new file mode 100644
+index 00000000..766922db
+--- /dev/null
++++ b/src/views/Charts/components/FriendStatusLights.vue
+@@ -0,0 +1,797 @@
++<template>
++    <div id="chart" class="x-container">
++        <div class="flex h-[calc(100vh-96px)] min-h-0 gap-3 pt-3">
++            <!-- 左栏：从好友里挑一个 -->
++            <aside class="flex w-72 flex-none flex-col gap-2 border-r border-muted-foreground/20 pr-3 min-h-0">
++                <div class="flex items-center gap-2">
++                    <Lightbulb class="size-4 shrink-0 text-muted-foreground" />
++                    <span class="truncate text-sm font-medium">{{ t('view.charts.friend_status_lights.header') }}</span>
++                    <HoverCard>
++                        <HoverCardTrigger as-child>
++                            <Info class="size-3.5 shrink-0 cursor-pointer opacity-70" />
++                        </HoverCardTrigger>
++                        <HoverCardContent side="bottom" align="start" class="w-80 text-xs">
++                            {{ t('view.charts.friend_status_lights.tips.coverage') }}
++                        </HoverCardContent>
++                    </HoverCard>
++                </div>
++
++                <Input v-model="search" :placeholder="t('view.charts.friend_status_lights.search_placeholder')" />
++
++                <ScrollArea class="min-h-0 flex-1 pr-1">
++                    <div v-if="!filteredCandidates.length" class="px-2 py-6 text-xs text-muted-foreground">
++                        {{ t('view.charts.friend_status_lights.no_candidates') }}
++                    </div>
++                    <button
++                        v-for="candidate in filteredCandidates"
++                        :key="candidate.userId"
++                        type="button"
++                        class="x-hover-list flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left"
++                        :class="candidate.userId === selectedId ? 'bg-accent' : ''"
++                        @click="selectFriend(candidate.userId)">
++                        <div class="relative inline-block size-9 flex-none" :class="userStatusClass(candidate.user)">
++                            <Avatar class="size-9">
++                                <AvatarImage :src="userImage(candidate.user, true)" class="object-cover" />
++                                <AvatarFallback><User class="size-4 text-muted-foreground" /></AvatarFallback>
++                            </Avatar>
++                        </div>
++                        <div class="min-w-0 flex-1">
++                            <div
++                                class="truncate text-[13px] font-medium"
++                                :style="{ color: candidate.user?.$userColour }">
++                                {{ candidate.displayName }}
++                            </div>
++                            <div class="truncate text-[11px] text-muted-foreground">
++                                {{
++                                    t('view.charts.friend_status_lights.candidate_changes', {
++                                        count: candidate.changes
++                                    })
++                                }}
++                                · {{ candidate.lastAt ? timeAgo(candidate.lastAt) : '—' }}
++                            </div>
++                        </div>
++                    </button>
++                </ScrollArea>
++            </aside>
++
++            <!-- 右栏：详情 -->
++            <main class="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto pb-6">
++                <div v-if="!selectedId" class="mt-[120px] flex justify-center">
++                    <DataTableEmpty type="nodata" />
++                </div>
++
++                <template v-else>
++                    <div class="flex flex-wrap items-center justify-between gap-2">
++                        <div class="flex min-w-0 items-center gap-2">
++                            <span
++                                class="cursor-pointer truncate text-base font-medium hover:underline"
++                                @click="showUserDialog(selectedId)">
++                                {{ selectedName }}
++                            </span>
++                            <ToggleGroup
++                                variant="outline"
++                                type="single"
++                                :model-value="String(rangeDays)"
++                                @update:modelValue="handleRangeChange">
++                                <ToggleGroupItem v-for="option in rangeOptions" :key="option" :value="String(option)">
++                                    {{
++                                        option
++                                            ? t(`view.charts.friend_status_lights.period.days_${option}`)
++                                            : t('view.charts.friend_status_lights.period.all')
++                                    }}
++                                </ToggleGroupItem>
++                            </ToggleGroup>
++                        </div>
++
++                        <div class="flex items-center gap-2">
++                            <TooltipWrapper side="left" :content="t('view.charts.friend_status_lights.tips.inferred')">
++                                <span class="cursor-help text-[11px] text-muted-foreground">
++                                    {{ t('view.charts.friend_status_lights.toggle.inferred') }}
++                                </span>
++                            </TooltipWrapper>
++                            <Switch v-model="includeInferred" />
++                        </div>
++                    </div>
++
++                    <div v-if="loading" class="mt-[100px] flex justify-center">
++                        <RefreshCcw class="size-6 animate-spin text-muted-foreground" />
++                    </div>
++
++                    <div
++                        v-else-if="!intervals.length"
++                        class="rounded-xl border border-dashed border-muted-foreground/30 p-6">
++                        <span class="text-xs text-muted-foreground">
++                            {{ t('view.charts.friend_status_lights.empty') }}
++                        </span>
++                    </div>
++
++                    <template v-else>
++                        <!-- 概览 -->
++                        <div class="grid grid-cols-2 gap-2 md:grid-cols-4">
++                            <div v-for="card in statCards" :key="card.label" class="rounded-xl border p-3">
++                                <div class="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
++                                    {{ card.label }}
++                                </div>
++                                <div class="mt-1 truncate text-lg font-medium" :title="card.title || ''">
++                                    {{ card.value }}
++                                </div>
++                                <div v-if="card.hint" class="truncate text-[11px] text-muted-foreground">
++                                    {{ card.hint }}
++                                </div>
++                            </div>
++                        </div>
++
++                        <!-- 四灯占比 -->
++                        <section class="rounded-xl border p-3">
++                            <div class="mb-2 flex items-center justify-between gap-2">
++                                <span class="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
++                                    {{ t('view.charts.friend_status_lights.section.shares') }}
++                                </span>
++                                <HoverCard>
++                                    <HoverCardTrigger as-child>
++                                        <Info class="size-3.5 shrink-0 cursor-pointer opacity-70" />
++                                    </HoverCardTrigger>
++                                    <HoverCardContent side="left" align="end" class="w-80 text-xs">
++                                        {{ t('view.charts.friend_status_lights.tips.shares') }}
++                                    </HoverCardContent>
++                                </HoverCard>
++                            </div>
++
++                            <div
++                                v-if="shareTotalMs"
++                                class="flex h-6 w-full overflow-hidden rounded-full bg-black/[0.05] dark:bg-white/[0.05]">
++                                <TooltipWrapper
++                                    v-for="row in visibleShares"
++                                    :key="row.light"
++                                    :content="`${lightLabel(row.light)} · ${timeToText(row.ms, false)}`">
++                                    <div
++                                        class="h-full transition-all duration-500"
++                                        :style="{
++                                            width: `${row.share * 100}%`,
++                                            backgroundColor: row.colour,
++                                            opacity: row.onlyInferred ? 0.45 : 1
++                                        }"></div>
++                                </TooltipWrapper>
++                            </div>
++
++                            <div class="mt-3 space-y-1.5">
++                                <div v-for="row in shareRows" :key="row.light" class="flex items-center gap-2 text-xs">
++                                    <i class="x-user-status shrink-0" :class="row.tone"></i>
++                                    <span class="w-24 shrink-0 truncate">{{ lightLabel(row.light) }}</span>
++                                    <div
++                                        class="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
++                                        <div
++                                            class="h-full rounded-full transition-all duration-500"
++                                            :style="{
++                                                width: `${Math.max(row.share ? 2 : 0, row.share * 100)}%`,
++                                                backgroundColor: row.colour,
++                                                opacity: row.onlyInferred ? 0.45 : 1
++                                            }"></div>
++                                    </div>
++                                    <span class="w-12 shrink-0 text-right font-mono text-[11px]">
++                                        {{ row.ms ? `${Math.round(row.share * 100)}%` : '—' }}
++                                    </span>
++                                    <span class="w-16 shrink-0 text-right text-[11px] text-muted-foreground">
++                                        {{ row.ms ? timeToText(row.ms, false) : '—' }}
++                                    </span>
++                                    <span class="w-20 shrink-0 text-right text-[11px] text-muted-foreground">
++                                        {{
++                                            row.runs
++                                                ? t('view.charts.friend_status_lights.row.average', {
++                                                      duration: timeToText(row.averageMs, false)
++                                                  })
++                                                : '—'
++                                        }}
++                                    </span>
++                                </div>
++                            </div>
++
++                            <div
++                                class="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t pt-2 text-[11px] text-muted-foreground">
++                                <span>
++                                    {{ t('view.charts.friend_status_lights.bucket.unknown_online') }}
++                                    <span class="font-medium text-foreground">{{
++                                        shortDuration(summary.unknownOnlineMs)
++                                    }}</span>
++                                </span>
++                                <span>
++                                    {{ t('view.charts.friend_status_lights.bucket.offline') }}
++                                    <span class="font-medium text-foreground">{{
++                                        shortDuration(summary.offlineMs)
++                                    }}</span>
++                                </span>
++                                <span>
++                                    {{ t('view.charts.friend_status_lights.bucket.unrecorded') }}
++                                    <span class="font-medium text-foreground">{{
++                                        shortDuration(summary.unrecordedMs)
++                                    }}</span>
++                                </span>
++                                <TooltipWrapper
++                                    side="top"
++                                    :content="t('view.charts.friend_status_lights.tips.buckets')">
++                                    <Info class="size-3.5 cursor-help opacity-70" />
++                                </TooltipWrapper>
++                            </div>
++                        </section>
++
++                        <!-- 状态时间线 -->
++                        <section class="rounded-xl border p-3">
++                            <div class="mb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
++                                {{ t('view.charts.friend_status_lights.section.timeline') }}
++                            </div>
++
++                            <div class="mb-2 flex flex-wrap items-center gap-3 text-[10px] text-muted-foreground">
++                                <span v-for="meta in lightMeta" :key="meta.light" class="flex items-center gap-1">
++                                    <i class="x-user-status" :class="meta.tone"></i>
++                                    {{ lightLabel(meta.light) }}
++                                </span>
++                                <span class="flex items-center gap-1">
++                                    <i class="x-user-status offline"></i>
++                                    {{ t('view.charts.friend_status_lights.state.offline') }}
++                                </span>
++                                <span class="flex items-center gap-1">
++                                    <i class="x-user-status"></i>
++                                    {{ t('view.charts.friend_status_lights.state.unknown') }}
++                                </span>
++                            </div>
++
++                            <div v-for="day in timelineDays" :key="day.dateKey" class="mb-3 last:mb-0">
++                                <div class="mb-1 flex items-baseline justify-between gap-2">
++                                    <span class="text-[11px] font-medium">{{ formatDayLabel(day.dateKey) }}</span>
++                                    <span class="text-[10px] text-muted-foreground">
++                                        {{
++                                            t('view.charts.friend_status_lights.timeline.recorded', {
++                                                duration: shortDuration(day.observedMs)
++                                            })
++                                        }}
++                                    </span>
++                                </div>
++
++                                <div
++                                    class="relative h-3 w-full overflow-hidden rounded-[3px] bg-black/[0.05] dark:bg-white/[0.05]">
++                                    <TooltipWrapper
++                                        v-for="(segment, index) in day.segments"
++                                        :key="index"
++                                        :content="segmentTooltip(segment)">
++                                        <div
++                                            class="absolute top-0 h-full"
++                                            :style="{
++                                                ...segmentStyle(segment),
++                                                backgroundColor: segmentColour(segment),
++                                                opacity: segmentOpacity(segment)
++                                            }"></div>
++                                    </TooltipWrapper>
++                                </div>
++
++                                <div
++                                    v-for="(segment, index) in dayLightSegments(day)"
++                                    :key="index"
++                                    class="flex items-center gap-2 py-0.5 pl-1">
++                                    <span class="w-11 shrink-0 font-mono text-[11px] text-muted-foreground">
++                                        {{ segment.continuesFrom ? '…' : formatTime(segment.startAt) }}
++                                    </span>
++                                    <i class="x-user-status shrink-0" :class="segment.tone"></i>
++                                    <span class="w-24 shrink-0 truncate text-xs">{{ lightLabel(segment.light) }}</span>
++                                    <span class="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
++                                        {{ segment.description }}
++                                    </span>
++                                    <span class="shrink-0 text-[11px] text-muted-foreground/80">
++                                        {{ timeToText(segment.durationMs, false)
++                                        }}{{ segment.continuesInto ? '+' : '' }}
++                                    </span>
++                                </div>
++
++                                <div
++                                    v-if="!dayLightSegments(day).length"
++                                    class="py-0.5 pl-1 text-[11px] text-muted-foreground">
++                                    {{ t('view.charts.friend_status_lights.timeline.no_change') }}
++                                </div>
++                            </div>
++                        </section>
++
++                        <!-- 什么时段挂什么灯 -->
++                        <section class="rounded-xl border p-3">
++                            <div class="mb-2 flex items-center justify-between gap-2">
++                                <span class="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
++                                    {{ t('view.charts.friend_status_lights.section.hours') }}
++                                </span>
++                                <span v-if="peakHour" class="text-[11px] text-muted-foreground">
++                                    {{ t('view.charts.friend_status_lights.hours.peak', peakHour) }}
++                                </span>
++                            </div>
++
++                            <div class="flex items-end gap-[2px] pl-1">
++                                <div
++                                    class="flex h-24 w-8 shrink-0 flex-col justify-between text-[9px] text-muted-foreground/70">
++                                    <span>{{ axisTop }}</span>
++                                    <span>0</span>
++                                </div>
++                                <div class="flex min-w-0 flex-1 items-end gap-[2px]">
++                                    <TooltipWrapper
++                                        v-for="(bucket, hour) in hours.hours"
++                                        :key="hour"
++                                        :content="hourTooltip(hour, bucket)">
++                                        <div
++                                            class="flex h-24 min-w-0 flex-1 flex-col-reverse overflow-hidden rounded-[2px] bg-black/[0.05] dark:bg-white/[0.05]">
++                                            <div
++                                                v-for="meta in lightMeta"
++                                                :key="meta.light"
++                                                :style="{
++                                                    height: bucketHeight(bucket[meta.light]),
++                                                    backgroundColor: meta.colour
++                                                }"></div>
++                                        </div>
++                                    </TooltipWrapper>
++                                </div>
++                            </div>
++                            <div class="mt-1 flex gap-[2px] pl-9">
++                                <span
++                                    v-for="hour in 24"
++                                    :key="hour"
++                                    class="min-w-0 flex-1 text-center text-[9px] text-muted-foreground/70">
++                                    {{ (hour - 1) % 3 === 0 ? hour - 1 : '' }}
++                                </span>
++                            </div>
++                        </section>
++
++                        <!-- 文案改动 -->
++                        <section class="rounded-xl border p-3">
++                            <div class="mb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
++                                {{ t('view.charts.friend_status_lights.section.descriptions') }}
++                            </div>
++                            <div class="mb-2 text-[11px] text-muted-foreground">
++                                {{ t('view.charts.friend_status_lights.descriptions.hint') }}
++                            </div>
++
++                            <div v-if="!descriptionChanges.length" class="text-[11px] text-muted-foreground">
++                                {{ t('view.charts.friend_status_lights.descriptions.empty') }}
++                            </div>
++                            <div
++                                v-for="(change, index) in descriptionChanges"
++                                :key="index"
++                                class="flex items-start gap-2 border-l border-muted-foreground/20 py-1 pl-3">
++                                <i class="x-user-status mt-1 shrink-0" :class="change.tone"></i>
++                                <div class="min-w-0 flex-1">
++                                    <div class="flex items-baseline gap-2 text-[11px] text-muted-foreground">
++                                        <span>{{ formatDateFilter(change.at, 'short') }}</span>
++                                        <span>{{ formatTime(change.at) }}</span>
++                                    </div>
++                                    <div class="break-words text-xs">
++                                        <span
++                                            v-if="change.previousDescription"
++                                            class="text-muted-foreground line-through">
++                                            {{ change.previousDescription }}
++                                        </span>
++                                        <span v-else class="text-muted-foreground">—</span>
++                                        <span class="mx-1 text-muted-foreground">→</span>
++                                        <span>{{ change.description || '—' }}</span>
++                                    </div>
++                                </div>
++                            </div>
++                        </section>
++                    </template>
++                </template>
++            </main>
++        </div>
++    </div>
++</template>
++
++<script setup>
++    import { computed, onMounted, ref, watch } from 'vue';
++    import { Info, Lightbulb, RefreshCcw, User } from 'lucide-vue-next';
++    import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
++    import { DataTableEmpty } from '@/components/ui/data-table';
++    import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
++    import { Input } from '@/components/ui/input';
++    import { ScrollArea } from '@/components/ui/scroll-area';
++    import { Switch } from '@/components/ui/switch';
++    import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
++    import { TooltipWrapper } from '@/components/ui/tooltip';
++    import { storeToRefs } from 'pinia';
++    import { useI18n } from 'vue-i18n';
++    import { useRoute } from 'vue-router';
++
++    import { useUserDisplay } from '@/composables/useUserDisplay';
++    import { showUserDialog } from '@/coordinators/userCoordinator';
++    import { database } from '@/services/database';
++    import { useFriendStore } from '@/stores';
++    import {
++        STATUS_LIGHT_META,
++        buildStatusIntervals,
++        formatDateFilter,
++        statusDescriptionChanges,
++        statusLightDays,
++        statusLightHours,
++        statusLightShares,
++        summarizeStatusLights,
++        timeAgo,
++        timeToText
++    } from '@/shared/utils';
++
++    import '@/styles/status-icon.css';
++
++    const { t } = useI18n();
++    const route = useRoute();
++    const { friends } = storeToRefs(useFriendStore());
++    const { userImage, userStatusClass } = useUserDisplay();
++
++    const DAY_MS = 24 * 60 * 60 * 1000;
++    const MINUTES_PER_DAY = 24 * 60;
++    const rangeOptions = [7, 30, 90, 0];
++    const lightMeta = STATUS_LIGHT_META;
++
++    const candidates = ref([]);
++    const search = ref('');
++    const selectedId = ref('');
++    const rangeDays = ref(30);
++    const loading = ref(false);
++    const statusRows = ref([]);
++    const presenceRows = ref([]);
++    const includeInferred = ref(false);
++
++    const filteredCandidates = computed(() => {
++        const needle = search.value.trim().toLowerCase();
++        if (!needle) {
++            return candidates.value;
++        }
++        return candidates.value.filter(
++            (candidate) =>
++                candidate.displayName.toLowerCase().includes(needle) || candidate.userId.toLowerCase().includes(needle)
++        );
++    });
++
++    const selectedName = computed(() => {
++        const candidate = candidates.value.find((entry) => entry.userId === selectedId.value);
++        if (candidate) {
++            return candidate.displayName;
++        }
++        const friend = friends.value.get(selectedId.value);
++        return friend?.ref?.displayName || friend?.name || selectedId.value;
++    });
++
++    const intervals = computed(() => buildStatusIntervals(statusRows.value, presenceRows.value));
++
++    const summary = computed(() => summarizeStatusLights(intervals.value));
++
++    const shares = computed(() => statusLightShares(summary.value, { includeInferred: includeInferred.value }));
++
++    const hours = computed(() => statusLightHours(intervals.value));
++
++    const timelineDays = computed(() => statusLightDays(intervals.value, 14));
++
++    const descriptionChanges = computed(() => statusDescriptionChanges(statusRows.value, { onlySameLight: true }));
++
++    /** Rows carry the style tone and colour the two charts need. */
++    const shareRows = computed(() =>
++        shares.value.rows.map((row) => {
++            const stats = summary.value.lights[row.light] || {};
++            const meta = lightMeta.find((entry) => entry.light === row.light) || {};
++            return {
++                ...row,
++                colour: meta.colour,
++                tone: meta.tone,
++                runs: stats.runs || 0,
++                averageMs: stats.averageMs || 0,
++                onlyInferred: includeInferred.value && row.ms > 0 && !(stats.observedMs > 0)
++            };
++        })
++    );
++
++    const visibleShares = computed(() => shareRows.value.filter((row) => row.ms > 0));
++
++    const shareTotalMs = computed(() => shares.value.totalMs);
++
++    const lastRecordAt = computed(() => {
++        let newest = 0;
++        for (const row of statusRows.value) {
++            const at = Date.parse(row.created_at);
++            if (at > newest) {
++                newest = at;
++            }
++        }
++        for (const row of presenceRows.value) {
++            const at = Date.parse(row.created_at);
++            if (at > newest) {
++                newest = at;
++            }
++        }
++        return newest;
++    });
++
++    const statCards = computed(() => {
++        const stats = summary.value;
++        const top = [...shareRows.value].sort((a, b) => b.ms - a.ms)[0];
++        const longest = lightMeta
++            .map((meta) => stats.lights[meta.light])
++            .filter(Boolean)
++            .sort((a, b) => b.longestMs - a.longestMs)[0];
++        return [
++            {
++                label: t('view.charts.friend_status_lights.stats.recorded'),
++                value: stats.observedMs ? timeToText(stats.observedMs, false) : '—',
++                hint: stats.firstAt
++                    ? t('view.charts.friend_status_lights.stats.since', {
++                          date: formatDateFilter(stats.firstAt, 'short')
++                      })
++                    : ''
++            },
++            {
++                label: t('view.charts.friend_status_lights.stats.days'),
++                value: String(stats.days),
++                hint: lastRecordAt.value
++                    ? t('view.charts.friend_status_lights.stats.last_change', {
++                          time: timeAgo(lastRecordAt.value)
++                      })
++                    : ''
++            },
++            {
++                label: t('view.charts.friend_status_lights.stats.most_used'),
++                value: top && top.ms ? lightLabel(top.light) : '—',
++                hint:
++                    top && top.ms
++                        ? t('view.charts.friend_status_lights.stats.most_used_hint', {
++                              percent: Math.round(top.share * 100)
++                          })
++                        : ''
++            },
++            {
++                label: t('view.charts.friend_status_lights.stats.switches'),
++                value: String(stats.switches),
++                hint:
++                    longest && longest.longestMs
++                        ? t('view.charts.friend_status_lights.stats.longest_hint', {
++                              light: lightLabel(longest.light),
++                              duration: timeToText(longest.longestMs, false)
++                          })
++                        : ''
++            }
++        ];
++    });
++
++    const peakHour = computed(() => {
++        let best = null;
++        hours.value.hours.forEach((bucket, hour) => {
++            const total = Object.values(bucket).reduce((sum, ms) => sum + ms, 0);
++            if (total > 0 && (!best || total > best.ms)) {
++                best = { hour, ms: total };
++            }
++        });
++        return best ? { hour: best.hour, duration: shortDuration(best.ms) } : null;
++    });
++
++    const axisTop = computed(() => shortDuration(hours.value.maxHourMs));
++
++    /**
++     * @param {number} ms
++     * @returns {string} A compact duration, or an em dash for nothing
++     */
++    function shortDuration(ms) {
++        return ms ? timeToText(ms, false) : '—';
++    }
++
++    /**
++     * @param {string} light
++     * @returns {string}
++     */
++    function lightLabel(light) {
++        const key = lightMeta.find((entry) => entry.light === light);
++        return key ? t(`view.charts.friend_status_lights.light.${key.tone}`) : light;
++    }
++
++    /**
++     * @param {number} timestamp
++     * @returns {string} Hour and minute, honouring the clock format setting
++     */
++    function formatTime(timestamp) {
++        return formatDateFilter(timestamp, 'time');
++    }
++
++    /**
++     * @param {string} dateKey - YYYY-MM-DD as produced by the aggregation layer
++     * @returns {string}
++     */
++    function formatDayLabel(dateKey) {
++        return formatDateFilter(`${dateKey}T00:00:00`, 'long');
++    }
++
++    /**
++     * @param {number} timestamp
++     * @returns {number} Minutes since local midnight
++     */
++    function minutesOfDay(timestamp) {
++        const date = new Date(timestamp);
++        return date.getHours() * 60 + date.getMinutes();
++    }
++
++    /**
++     * Place a segment inside its day band, clamped to the day it was split into.
++     *
++     * @param {object} segment
++     * @returns {{ left: string; width: string }}
++     */
++    function segmentStyle(segment) {
++        const start = segment.continuesFrom ? 0 : minutesOfDay(segment.startAt);
++        const end = segment.continuesInto ? MINUTES_PER_DAY : minutesOfDay(segment.endAt);
++        const span = Math.max(end - start, 1);
++        return {
++            left: `${(start / MINUTES_PER_DAY) * 100}%`,
++            width: `${Math.max(0.25, (span / MINUTES_PER_DAY) * 100)}%`
++        };
++    }
++
++    /**
++     * @param {object} segment
++     * @returns {string}
++     */
++    function segmentColour(segment) {
++        if (!segment.online) {
++            return 'var(--status-offline)';
++        }
++        const meta = lightMeta.find((entry) => entry.light === segment.light);
++        return meta ? meta.colour : 'var(--muted-foreground)';
++    }
++
++    /**
++     * @param {object} segment
++     * @returns {number}
++     */
++    function segmentOpacity(segment) {
++        if (!segment.online) {
++            return 0.45;
++        }
++        if (!segment.light) {
++            return 0.2;
++        }
++        return segment.known ? 1 : 0.5;
++    }
++
++    /**
++     * @param {object} segment
++     * @returns {string}
++     */
++    function segmentTooltip(segment) {
++        if (!segment.online) {
++            return `${formatTime(segment.startAt)} · ${t('view.charts.friend_status_lights.state.offline')}`;
++        }
++        if (!segment.light) {
++            return `${formatTime(segment.startAt)} · ${t('view.charts.friend_status_lights.state.unknown')}`;
++        }
++        const suffix = segment.known ? '' : ` (${t('view.charts.friend_status_lights.state.inferred')})`;
++        return `${formatTime(segment.startAt)} · ${lightLabel(segment.light)} · ${timeToText(segment.durationMs, false)}${suffix}`;
++    }
++
++    /**
++     * Only the stretches that actually show a light are worth listing; offline and
++     * unknown stretches stay visible in the band above.
++     *
++     * @param {object} day
++     * @returns {object[]}
++     */
++    function dayLightSegments(day) {
++        return day.segments.filter((segment) => segment.online && segment.light);
++    }
++
++    /**
++     * @param {object} bucket - Hour bucket keyed by light
++     * @returns {string}
++     */
++    function bucketHeight(ms) {
++        if (!ms) {
++            return '0%';
++        }
++        return `${Math.min(100, (ms / hours.value.maxHourMs) * 100)}%`;
++    }
++
++    /**
++     * @param {number} hour
++     * @param {object} bucket
++     * @returns {string}
++     */
++    function hourTooltip(hour, bucket) {
++        const parts = lightMeta
++            .filter((meta) => bucket[meta.light])
++            .map((meta) => `${lightLabel(meta.light)} ${timeToText(bucket[meta.light], false)}`);
++        const head = t('view.charts.friend_status_lights.hours.hour', { hour });
++        return parts.length ? `${head}\n${parts.join('\n')}` : `${head} —`;
++    }
++
++    function handleRangeChange(value) {
++        if (!value) {
++            return;
++        }
++        rangeDays.value = parseInt(value, 10);
++        loadHistory();
++    }
++
++    function selectFriend(userId) {
++        if (selectedId.value === userId) {
++            return;
++        }
++        selectedId.value = userId;
++        loadHistory();
++    }
++
++    async function loadCandidates() {
++        try {
++            const since = rangeDays.value ? new Date(Date.now() - rangeDays.value * DAY_MS).toISOString() : '';
++            const rows = await database.getPlayersWithStatusHistory(since);
++            candidates.value = rows.map((row) => {
++                const friend = friends.value.get(row.userId);
++                return {
++                    ...row,
++                    user: friend?.ref || { id: row.userId, displayName: row.displayName },
++                    displayName: friend?.ref?.displayName || friend?.name || row.displayName || row.userId
++                };
++            });
++        } catch (error) {
++            console.error('Failed to load status light candidates', error);
++            candidates.value = [];
++        }
++    }
++
++    async function loadHistory() {
++        const userId = selectedId.value;
++        if (!userId) {
++            statusRows.value = [];
++            presenceRows.value = [];
++            return;
++        }
++        loading.value = true;
++        try {
++            const since = rangeDays.value ? new Date(Date.now() - rangeDays.value * DAY_MS).toISOString() : '';
++            const [statuses, presences] = await Promise.all([
++                database.getStatusRowsForUserId(userId, since),
++                database.getPresenceRowsForUserId(userId, since)
++            ]);
++            // the left column may have moved on to another friend while we waited
++            if (selectedId.value !== userId) {
++                return;
++            }
++            statusRows.value = statuses;
++            presenceRows.value = presences;
++        } catch (error) {
++            console.error('Failed to load status light history', error);
++            if (selectedId.value === userId) {
++                statusRows.value = [];
++                presenceRows.value = [];
++            }
++        } finally {
++            if (selectedId.value === userId) {
++                loading.value = false;
++            }
++        }
++    }
++
++    watch(
++        () => friends.value.size,
++        () => {
++            if (!candidates.value.length) {
++                loadCandidates();
++            }
++        }
++    );
++
++    onMounted(async () => {
++        await loadCandidates();
++        const wanted = String(route.query.user || '');
++        if (wanted && wanted !== selectedId.value) {
++            selectFriend(wanted);
++            return;
++        }
++        if (!selectedId.value && candidates.value.length) {
++            selectedId.value = candidates.value[0].userId;
++            loadHistory();
++        }
++    });
++
++    // arriving here from another player's profile while the page is already mounted
++    watch(
++        () => route.query.user,
++        (value) => {
++            const wanted = String(value || '');
++            if (wanted && wanted !== selectedId.value) {
++                selectFriend(wanted);
++            }
++        }
++    );
++</script>
+diff --git a/src/views/Dashboard/components/panelRegistry.js b/src/views/Dashboard/components/panelRegistry.js
+index 95ec8bf2..6fd5112f 100644
+--- a/src/views/Dashboard/components/panelRegistry.js
++++ b/src/views/Dashboard/components/panelRegistry.js
+@@ -33,6 +33,7 @@ export const panelComponentMap = {
+     'charts-mutual': defineAsyncComponent(() => import('../../Charts/components/MutualFriends.vue')),
+     'charts-hot-worlds': defineAsyncComponent(() => import('../../Charts/components/HotWorlds.vue')),
+     'charts-friend-footprints': defineAsyncComponent(() => import('../../Charts/components/FriendFootprints.vue')),
++    'charts-friend-status-lights': defineAsyncComponent(() => import('../../Charts/components/FriendStatusLights.vue')),
+     tools: Tools,
+     'widget:feed': defineAsyncComponent(() => import('../widgets/FeedWidget.vue')),
+     'widget:game-log': defineAsyncComponent(() => import('../widgets/GameLogWidget.vue')),
+-- 
+2.55.0.windows.3
+
