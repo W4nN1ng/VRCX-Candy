@@ -15,13 +15,15 @@ export const GROUP_INVITE_GROUP_ID = 'grp_3d453804-fcd8-4187-9c36-1dc2a1d5b2ce';
 /**
  * Config key recording that the prompt has been shown.
  *
- * Written on every path - joined, declined, or the request failed - and never
- * cleared, which is what makes the prompt appear at most once ever. It is not
- * scoped to a user id, because the point is that this installation has already
- * asked; signing into a second account should not bring it back.
+ * Written once the question has actually been answered, and never cleared, which is
+ * what makes the prompt appear at most once ever. It is not scoped to a user id,
+ * because the point is that this installation has already asked; signing into a
+ * second account should not bring it back.
+ *
+ * The `_v2` suffix is not decoration. Builds up to 2026.09.23 decided membership from
+ * the group list in the store, which is the previous session's membership until the
+ * fresh list arrives, so anybody who was in the group at their last run was taken for
+ * a member and had this flag written without ever being asked. A new key hands those
+ * installations back their one prompt.
  */
-export const GROUP_INVITE_SEEN_KEY = 'VRCX_group_invite_seen';
-
-// How long to wait for the group list before giving up. The list is fetched after
-// login, and deciding before it arrives would mistake a member for a stranger.
-export const GROUP_INVITE_GROUP_WAIT_MS = 15000;
+export const GROUP_INVITE_SEEN_KEY = 'VRCX_group_invite_seen_v2';

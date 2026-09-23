@@ -15,6 +15,7 @@ export * from './friendFootprints';
 export * from './friendStatusLights';
 export * from './friendTogether';
 export * from './group';
+export * from './groupInvite';
 export * from './instance';
 export * from './platformUtils';
 export * from './setting';
