@@ -4,8 +4,10 @@
 $script:VrcxMod = @{
     # 你的 fork 仓库
     Repo         = 'C:\Users\28041\vrcx-fork'
-    # 你维护的功能分支，所有自定义改动都在这条线上
-    Branch       = 'feature/bio-history'
+    # 部署分支：所有自定义功能都汇在这条线上，一个功能一个 commit。
+    # master 保持官方原样不动，它是 rebase 时的对照基线。
+    # 加新功能：git checkout -b feature/xxx upstream/master 做完再并回 my-vrcx。
+    Branch       = 'my-vrcx'
     # VRCX 安装目录（里面有 Version 文件和 html 前端目录）
     InstallDir   = 'E:\VRCX'
     # 官方更新器下载 VRCX_Setup.exe 后会重装整个目录，html 会被覆盖，
