@@ -91,24 +91,27 @@
                                 {{ t('view.charts.friend_together.section.pairs') }}
                             </div>
                             <button
-                                v-for="pair in topPairs"
-                                :key="`${pair.a.userId}-${pair.b.userId}`"
+                                v-for="(group, index) in topGroups"
+                                :key="index"
                                 type="button"
                                 class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-accent"
-                                @click="showUserDialog(pair.a.userId)">
-                                <Avatar class="size-6 shrink-0">
-                                    <AvatarImage :src="userImage(userFor(pair.a.userId), true)" class="object-cover" />
-                                    <AvatarFallback><User class="size-3" /></AvatarFallback>
-                                </Avatar>
-                                <Avatar class="size-6 shrink-0">
-                                    <AvatarImage :src="userImage(userFor(pair.b.userId), true)" class="object-cover" />
-                                    <AvatarFallback><User class="size-3" /></AvatarFallback>
-                                </Avatar>
+                                @click="showUserDialog(group.members[0].userId)">
+                                <div class="flex shrink-0 items-center -space-x-1.5">
+                                    <Avatar
+                                        v-for="member in group.members.slice(0, 4)"
+                                        :key="member.userId"
+                                        class="size-6 ring-1 ring-background">
+                                        <AvatarImage
+                                            :src="userImage(userFor(member.userId), true)"
+                                            class="object-cover" />
+                                        <AvatarFallback><User class="size-3" /></AvatarFallback>
+                                    </Avatar>
+                                </div>
                                 <span class="min-w-0 flex-1 truncate text-xs">
-                                    {{ pair.a.displayName }} + {{ pair.b.displayName }}
+                                    {{ group.members.map((member) => member.displayName).join('、') }}
                                 </span>
                                 <span class="shrink-0 text-[11px] text-muted-foreground">
-                                    {{ t('view.charts.friend_together.unit.times', { count: pair.events }) }}
+                                    {{ t('view.charts.friend_together.unit.times', { count: group.events }) }}
                                 </span>
                             </button>
                         </section>
@@ -221,7 +224,7 @@
         summarizeTogether,
         timeToText,
         togetherByDay,
-        topTogetherPairs,
+        topTogetherGroups,
         topTogetherWorlds
     } from '@/shared/utils';
 
@@ -250,7 +253,7 @@
 
     const summary = computed(() => summarizeTogether(events.value));
 
-    const topPairs = computed(() => topTogetherPairs(events.value, 8));
+    const topGroups = computed(() => topTogetherGroups(events.value, 8));
 
     const topWorlds = computed(() => topTogetherWorlds(events.value, 8));
 

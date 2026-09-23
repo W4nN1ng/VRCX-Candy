@@ -8,7 +8,7 @@ import {
     markSelfPresence,
     summarizeTogether,
     togetherByDay,
-    topTogetherPairs,
+    topTogetherGroups,
     topTogetherWorlds
 } from '../friendTogether';
 
@@ -369,7 +369,7 @@ describe('summarizeTogether', () => {
     });
 });
 
-describe('togetherByDay, topTogetherPairs and topTogetherWorlds', () => {
+describe('togetherByDay, topTogetherGroups and topTogetherWorlds', () => {
     /**
      * @returns {object[]}
      */
@@ -397,14 +397,32 @@ describe('togetherByDay, topTogetherPairs and topTogetherWorlds', () => {
         expect(togetherByDay(null)).toEqual([]);
     });
 
-    test('ranks the pairs that keep meeting', () => {
-        const pairs = topTogetherPairs(events());
+    test('ranks the groups that keep meeting', () => {
+        const groups = topTogetherGroups(events());
 
-        expect(pairs).toHaveLength(1);
-        expect(pairs[0]).toMatchObject({ events: 2 });
-        expect(pairs[0].a.displayName).toBe('A');
-        expect(pairs[0].b.displayName).toBe('B');
-        expect(topTogetherPairs(null)).toEqual([]);
+        expect(groups).toHaveLength(1);
+        expect(groups[0]).toMatchObject({ events: 2 });
+        expect(groups[0].members.map((member) => member.displayName)).toEqual(['A', 'B']);
+        expect(topTogetherGroups(null)).toEqual([]);
+    });
+
+    test('keeps a gathering of three as one row instead of three pairs', () => {
+        // Splitting the trio into A+B, A+C and B+C would show one afternoon as three
+        // separate friendships, and contradicts the "three or more" filter.
+        const trio = buildTogetherEvents({
+            friendRows: [
+                gps('usr_1', 'A', WORLD_A, 0, 'Alpha'),
+                gps('usr_1', 'A', WORLD_B, HOUR),
+                gps('usr_2', 'B', WORLD_A, 10 * MINUTE, 'Alpha'),
+                gps('usr_2', 'B', WORLD_B, 50 * MINUTE),
+                gps('usr_3', 'C', WORLD_A, 15 * MINUTE, 'Alpha'),
+                gps('usr_3', 'C', WORLD_B, 40 * MINUTE)
+            ]
+        });
+        const groups = topTogetherGroups(trio);
+
+        expect(groups).toHaveLength(1);
+        expect(groups[0].members.map((member) => member.displayName)).toEqual(['A', 'B', 'C']);
     });
 
     test('ranks the maps they gather in', () => {

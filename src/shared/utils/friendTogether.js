@@ -408,36 +408,46 @@ function togetherByDay(events, limit = 30) {
 }
 
 /**
- * Which friends keep turning up together, most often first.
+ * Who keeps turning up together, most often first.
+ *
+ * The whole roster is the key rather than every pair inside it. Splitting a
+ * gathering of three into the three pairs it contains would show one afternoon as
+ * three separate friendships, and would contradict the "three or more" filter that
+ * produced it.
  *
  * @param {object[]} events
  * @param {number} [limit]
  * @returns {object[]}
  */
-function topTogetherPairs(events, limit = 10) {
-    const pairs = new Map();
+function topTogetherGroups(events, limit = 10) {
+    const groups = new Map();
     for (const event of events || []) {
         const people = [...(event.participants || [])].sort((a, b) => a.userId.localeCompare(b.userId));
-        for (let i = 0; i < people.length; i++) {
-            for (let j = i + 1; j < people.length; j++) {
-                const key = `${people[i].userId}|${people[j].userId}`;
-                if (!pairs.has(key)) {
-                    pairs.set(key, {
-                        a: { userId: people[i].userId, displayName: people[i].displayName },
-                        b: { userId: people[j].userId, displayName: people[j].displayName },
-                        events: 0,
-                        durationMs: 0,
-                        lastAt: 0
-                    });
-                }
-                const pair = pairs.get(key);
-                pair.events++;
-                pair.durationMs += event.durationMs;
-                pair.lastAt = Math.max(pair.lastAt, event.startAt);
-            }
+        if (people.length < 2) {
+            continue;
         }
+        const key = people.map((person) => person.userId).join('|');
+        if (!groups.has(key)) {
+            groups.set(key, {
+                members: people.map((person) => ({ userId: person.userId, displayName: person.displayName })),
+                events: 0,
+                durationMs: 0,
+                lastAt: 0
+            });
+        }
+        const group = groups.get(key);
+        group.events++;
+        group.durationMs += event.durationMs;
+        // Names change; keep the ones from the most recent sighting.
+        if (event.startAt >= group.lastAt) {
+            group.members = people.map((person) => ({
+                userId: person.userId,
+                displayName: person.displayName
+            }));
+        }
+        group.lastAt = Math.max(group.lastAt, event.startAt);
     }
-    return [...pairs.values()]
+    return [...groups.values()]
         .sort((x, y) => y.events - x.events || y.durationMs - x.durationMs || y.lastAt - x.lastAt)
         .slice(0, limit);
 }
@@ -490,6 +500,6 @@ export {
     markSelfPresence,
     summarizeTogether,
     togetherByDay,
-    topTogetherPairs,
+    topTogetherGroups,
     topTogetherWorlds
 };
