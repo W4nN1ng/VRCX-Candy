@@ -724,6 +724,17 @@
                     "auto_delete_prints_from_vrc": "Удалять старые фотографии из VRC по достижении лимита фотографий"
                 }
             }
+        },
+        "onboarding": {
+            "group_invite": {
+                "title": "Want to join our group?",
+                "description": "This build is maintained by a VRChat group. If you would like to join it, do that now - it is entirely up to you.",
+                "join": "Join the group",
+                "decline": "No thanks",
+                "once_only": "This is asked once. You can join or leave the group at any time from your VRChat profile.",
+                "joined": "You have joined the group",
+                "requested": "Join request sent, it needs to be approved"
+            }
         }
     },
     "dialog": {

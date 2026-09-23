@@ -1514,6 +1514,17 @@
                     }
                 }
             }
+        },
+        "onboarding": {
+            "group_invite": {
+                "title": "要不要加入我们的群组？",
+                "description": "这个改版是由一个 VRChat 群组在维护。想加入的话现在点一下就行，全凭你自愿。",
+                "join": "加入群组",
+                "decline": "暂不加入",
+                "once_only": "这个提示只问一次。以后想加或者想退，随时可以在 VRChat 个人资料里操作。",
+                "joined": "已加入群组",
+                "requested": "已发送加入申请，需要管理员通过"
+            }
         }
     },
     "dialog": {

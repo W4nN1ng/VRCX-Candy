@@ -75,6 +75,7 @@
         <ChangelogDialog />
         <WhatsNewDialog />
         <SpotlightDialog />
+        <GroupInviteDialog />
     </template>
 </template>
 
@@ -110,6 +111,7 @@
     import WorldImportDialog from '../Favorites/dialogs/WorldImportDialog.vue';
     import WhatsNewDialog from '../../components/onboarding/WhatsNewDialog.vue';
     import SpotlightDialog from '../../components/onboarding/SpotlightDialog.vue';
+    import GroupInviteDialog from '../../components/onboarding/GroupInviteDialog.vue';
 
     const router = useRouter();
 

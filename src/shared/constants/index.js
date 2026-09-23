@@ -3,6 +3,7 @@ export * from './feedFilters';
 export * from './language';
 export * from './settings';
 export * from './group';
+export * from './groupInvite';
 export * from './user';
 export * from './instance';
 export * from './world';
