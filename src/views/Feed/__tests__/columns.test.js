@@ -18,11 +18,16 @@ vi.mock('../../../coordinators/userCoordinator', () => ({
     showUserDialog: vi.fn()
 }));
 
-vi.mock('../../../shared/utils', () => ({
-    formatDateFilter: (value) => value,
-    statusClass: (value) => value,
-    timeToText: (value) => value
-}));
+vi.mock('../../../shared/utils', async () => {
+    // formatDifference is shared with the bio history dialog and has no deps
+    const { formatDifference } = await import('../../../shared/utils/base/diff');
+    return {
+        formatDateFilter: (value) => value,
+        statusClass: (value) => value,
+        timeToText: (value) => value,
+        formatDifference
+    };
+});
 
 vi.mock('../../../components/AvatarInfo.vue', () => ({
     default: 'AvatarInfo'

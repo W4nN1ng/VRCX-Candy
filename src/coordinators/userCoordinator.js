@@ -292,6 +292,8 @@ export function showUserDialog(userId) {
     D.publicProfileRef = {};
     D.memo = '';
     D.note = '';
+    D.bioHistory = [];
+    D.bioHistoryLoaded = false;
     getUserMemo(userId).then((memo) => {
         if (memo.userId === userId) {
             D.memo = memo.memo;

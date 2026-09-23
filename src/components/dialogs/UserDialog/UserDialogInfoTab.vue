@@ -143,6 +143,15 @@
                         </span>
                         <div class="flex items-center gap-1">
                             <Button
+                                v-if="userDialog.bioHistory.length"
+                                class="h-5 w-5"
+                                size="icon-sm"
+                                variant="ghost"
+                                :title="t('dialog.user.bio_history.header')"
+                                @click="isBioHistoryDialogVisible = true">
+                                <History class="h-3 w-3" :style="{ color: userDialog.theme.iconColor }" />
+                            </Button>
+                            <Button
                                 v-if="translationApi && userDialog.publicProfileRef?.bio"
                                 class="h-5 w-5"
                                 size="icon-sm"
@@ -165,6 +174,22 @@
                         class="text-xs font-[inherit]"
                         style="white-space: pre-wrap; max-height: 210px; overflow-y: auto"
                         >{{ bioCache.translated || userDialog.publicProfileRef?.bio || '—' }}</pre>
+                    <div v-if="previousBio !== null" class="mt-2 border-t border-muted-foreground/20 pt-2">
+                        <div class="flex items-center justify-between gap-2">
+                            <span
+                                class="text-[10px] font-bold uppercase tracking-wide text-muted-foreground cursor-pointer hover:text-foreground"
+                                @click="isBioHistoryDialogVisible = true">
+                                {{ t('dialog.user.bio_history.previous') }}
+                            </span>
+                            <span class="text-[10px] text-muted-foreground">{{
+                                timeAgo(lastBioChange.created_at)
+                            }}</span>
+                        </div>
+                        <pre
+                            class="text-xs font-[inherit] text-muted-foreground"
+                            style="white-space: pre-wrap; max-height: 90px; overflow-y: auto"
+                            >{{ previousBio || '—' }}</pre>
+                    </div>
                     <div
                         v-if="userDialog.publicProfileRef?.bioLinks && userDialog.publicProfileRef?.bioLinks.length"
                         class="flex flex-wrap items-center gap-1.5 mt-2">
@@ -442,13 +467,14 @@
         </div>
     </div>
     <EditNoteAndMemoDialog v-model:visible="isEditNoteAndMemoDialogVisible" />
+    <BioHistoryDialog v-model:visible="isBioHistoryDialogVisible" />
 </template>
 
 <script setup>
-    import { Info, Languages, Pencil, Trash2, User } from 'lucide-vue-next';
+    import { History, Info, Languages, Pencil, Trash2, User } from 'lucide-vue-next';
     import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
     import IconFrame from '@/components/IconFrame.vue';
-    import { ref, watch } from 'vue';
+    import { computed, ref, watch } from 'vue';
     import { Button } from '@/components/ui/button';
     import { Spinner } from '@/components/ui/spinner';
     import { storeToRefs } from 'pinia';
@@ -483,6 +509,7 @@
     import { showUserDialog } from '../../../coordinators/userCoordinator';
 
     import EditNoteAndMemoDialog from './EditNoteAndMemoDialog.vue';
+    import BioHistoryDialog from './BioHistoryDialog.vue';
 
     const { t } = useI18n();
 
@@ -493,7 +520,7 @@
     const { bioLanguage, translationApi, translationApiType } = storeToRefs(useAdvancedSettingsStore());
     const { translateText } = useAdvancedSettingsStore();
     const { userDialog, currentUser } = storeToRefs(useUserStore());
-    const { showEditProfileDialog } = useUserStore();
+    const { showEditProfileDialog, loadUserDialogBioHistory } = useUserStore();
     const { fullscreenImageDialog } = storeToRefs(useGalleryStore());
 
     const { lastLocation } = storeToRefs(useLocationStore());
@@ -505,8 +532,17 @@
     });
 
     const isEditNoteAndMemoDialogVisible = ref(false);
+    const isBioHistoryDialogVisible = ref(false);
     const vrchatCredit = ref(null);
     const translateLoading = ref(false);
+
+    // bioHistory is stored oldest first, so the last entry holds the previous bio
+    const lastBioChange = computed(() => {
+        const bioHistory = userDialog.value.bioHistory;
+        return bioHistory.length ? bioHistory[bioHistory.length - 1] : null;
+    });
+
+    const previousBio = computed(() => (lastBioChange.value ? String(lastBioChange.value.previousBio ?? '') : null));
 
     watch(
         () => userDialog.value.loading,
@@ -525,6 +561,9 @@
     function onTabActivated() {
         if (currentUser.value.id === userDialog.value.id && vrchatCredit.value === null) {
             getVRChatCredits();
+        }
+        if (!userDialog.value.bioHistoryLoaded) {
+            loadUserDialogBioHistory(userDialog.value.id);
         }
     }
 

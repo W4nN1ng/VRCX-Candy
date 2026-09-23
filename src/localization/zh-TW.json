@@ -1551,6 +1551,21 @@
                 "header": "編輯備註與備忘",
                 "cancel": "取消",
                 "confirm": "確認"
+            },
+            "bio_history": {
+                "header": "個人簡介歷史",
+                "current": "目前個人簡介",
+                "previous": "上一則個人簡介",
+                "next": "新個人簡介",
+                "updated": "更新於 {time}",
+                "changes": "共記錄 {count} 次修改",
+                "version": "第 {number} 次修改",
+                "show_diff": "顯示差異",
+                "show_full": "顯示完整文字",
+                "loading": "載入中...",
+                "empty": "尚未記錄到個人簡介修改",
+                "empty_hint": "VRCX 執行期間，好友更新個人簡介時就會被記錄下來",
+                "close": "關閉"
             }
         },
         "world": {

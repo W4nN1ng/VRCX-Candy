@@ -294,3 +294,23 @@ body {
         background-color 0.1s ease,
         color 0.1s ease;
 }
+
+/* Text Difference Markers
+ * Produced by formatDifference() in shared/utils/base/diff.js.
+ * Use them wherever an old and a new version of a text are compared
+ * (feed entries, bio history, ...).
+ */
+.x-text-removed {
+    text-decoration: line-through;
+    color: #ff0000;
+    background-color: rgba(255, 0, 0, 0.2);
+    padding: 2px 2px;
+    border-radius: 4px;
+}
+
+.x-text-added {
+    color: rgb(35, 188, 35);
+    background-color: rgba(76, 255, 80, 0.2);
+    padding: 2px 2px;
+    border-radius: 4px;
+}

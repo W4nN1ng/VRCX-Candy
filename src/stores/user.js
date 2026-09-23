@@ -282,7 +282,10 @@ export const useUserStore = defineStore('User', () => {
         mutualFriendCount: 0,
         mutualGroupCount: 0,
         mutualFriends: [],
-        isMutualFriendsLoading: false
+        isMutualFriendsLoading: false,
+        bioHistory: [],
+        bioHistoryLoading: false,
+        bioHistoryLoaded: false
     });
 
     const editProfileDialog = ref({
@@ -602,6 +605,37 @@ export const useUserStore = defineStore('User', () => {
             array.sort(compareByName);
         }
         D.avatars = array;
+    }
+
+    /**
+     * Loads the stored bio changes of a user into the user dialog state.
+     *
+     * @param {string} userId - VRChat user id to load the bio history for.
+     */
+    async function loadUserDialogBioHistory(userId) {
+        const D = userDialog.value;
+        if (!userId || D.id !== userId) {
+            return;
+        }
+        D.bioHistoryLoading = true;
+        try {
+            const bioHistory = await database.getBioHistoryForUserId(userId);
+            // the dialog may have been closed or switched to another user
+            if (userDialog.value.id !== userId) {
+                return;
+            }
+            userDialog.value.bioHistory = bioHistory;
+            userDialog.value.bioHistoryLoaded = true;
+        } catch (err) {
+            console.error('Failed to load bio history', err);
+            if (userDialog.value.id === userId) {
+                userDialog.value.bioHistory = [];
+            }
+        } finally {
+            if (userDialog.value.id === userId) {
+                userDialog.value.bioHistoryLoading = false;
+            }
+        }
     }
 
     async function initUserNotes() {
@@ -982,6 +1016,7 @@ export const useUserStore = defineStore('User', () => {
         clearCachedUsers,
         rebuildCachedUserDisplayNameIndex,
         sortUserDialogAvatars,
+        loadUserDialogBioHistory,
         initUserNotes,
         showSendBoopDialog,
         showEditProfileDialog,

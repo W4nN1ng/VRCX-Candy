@@ -1552,6 +1552,21 @@
                 "header": "ノートとメモを編集",
                 "cancel": "キャンセル",
                 "confirm": "保存"
+            },
+            "bio_history": {
+                "header": "自己紹介の履歴",
+                "current": "現在の自己紹介",
+                "previous": "前の自己紹介",
+                "next": "新しい自己紹介",
+                "updated": "更新 {time}",
+                "changes": "変更 {count} 件",
+                "version": "変更 {number}",
+                "show_diff": "差分を表示",
+                "show_full": "全文を表示",
+                "loading": "読み込み中...",
+                "empty": "自己紹介の変更が記録されていません",
+                "empty_hint": "VRCX 起動中にフレンドが自己紹介を更新すると記録されます",
+                "close": "閉じる"
             }
         },
         "world": {

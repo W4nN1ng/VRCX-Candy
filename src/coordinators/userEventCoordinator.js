@@ -31,7 +31,7 @@ export async function runHandleUserUpdateFlow(ref, props, { now = Date.now, nowI
     const notificationStore = useNotificationStore();
     const sharedFeedStore = useSharedFeedStore();
 
-    const { state, userDialog, applyUserDialogLocation, checkNote } = userStore;
+    const { state, userDialog, applyUserDialogLocation, checkNote, loadUserDialogBioHistory } = userStore;
 
     let feed;
     let newLocation;
@@ -230,15 +230,11 @@ export async function runHandleUserUpdateFlow(ref, props, { now = Date.now, nowI
         feedStore.addFeedEntry(feed);
         database.addStatusToDatabase(feed);
     }
-    if (props.bio && props.bio[0] && props.bio[1]) {
-        let bio = '';
-        let previousBio = '';
-        if (props.bio[0]) {
-            bio = props.bio[0];
-        }
-        if (props.bio[1]) {
-            previousBio = props.bio[1];
-        }
+    // props.bio is a [new, previous] tuple and only present when the two differ,
+    // so an empty side is a real change (bio set for the first time / bio cleared)
+    if (props.bio && props.bio[0] !== props.bio[1]) {
+        const bio = String(props.bio[0] ?? '');
+        const previousBio = String(props.bio[1] ?? '');
         feed = {
             created_at: nowIso(),
             type: 'Bio',
@@ -251,6 +247,9 @@ export async function runHandleUserUpdateFlow(ref, props, { now = Date.now, nowI
         sharedFeedStore.addEntry(feed);
         feedStore.addFeedEntry(feed);
         database.addBioToDatabase(feed);
+        if (userDialog.visible && userDialog.id === ref.id) {
+            loadUserDialogBioHistory(ref.id);
+        }
     }
     if (props.note && props.note[0] !== null && props.note[0] !== props.note[1]) {
         checkNote(ref.id, props.note[0]);

@@ -69,6 +69,9 @@ const database = {
             `CREATE TABLE IF NOT EXISTS ${dbVars.userPrefix}_feed_bio (id INTEGER PRIMARY KEY, created_at TEXT, user_id TEXT, display_name TEXT, bio TEXT, previous_bio TEXT)`
         );
         await sqliteService.executeNonQuery(
+            `CREATE INDEX IF NOT EXISTS ${dbVars.userPrefix}_feed_bio_user_created_idx ON ${dbVars.userPrefix}_feed_bio (user_id, created_at)`
+        );
+        await sqliteService.executeNonQuery(
             `CREATE TABLE IF NOT EXISTS ${dbVars.userPrefix}_feed_avatar (id INTEGER PRIMARY KEY, created_at TEXT, user_id TEXT, display_name TEXT, owner_id TEXT, avatar_name TEXT, current_avatar_image_url TEXT, current_avatar_thumbnail_image_url TEXT, previous_current_avatar_image_url TEXT, previous_current_avatar_thumbnail_image_url TEXT)`
         );
         await sqliteService.executeNonQuery(

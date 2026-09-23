@@ -47,6 +47,35 @@ const feed = {
         );
     },
 
+    /**
+     * Loads the recorded bio changes of a single user, oldest change first.
+     *
+     * @param {string} userId - VRChat user id.
+     * @param {number} maxEntries - Maximum number of changes to return.
+     * @returns {Promise<object[]>} Bio change entries with bio and previousBio.
+     */
+    async getBioHistoryForUserId(userId, maxEntries = dbVars.maxTableSize) {
+        const bioHistory = [];
+        await sqliteService.execute(
+            (dbRow) => {
+                bioHistory.push({
+                    rowId: dbRow[0],
+                    created_at: dbRow[1],
+                    userId: dbRow[2],
+                    displayName: dbRow[3],
+                    bio: dbRow[4] ?? '',
+                    previousBio: dbRow[5] ?? ''
+                });
+            },
+            `SELECT id, created_at, user_id, display_name, bio, previous_bio FROM ${dbVars.userPrefix}_feed_bio WHERE user_id = @user_id ORDER BY created_at ASC, id ASC LIMIT @limit`,
+            {
+                '@user_id': userId,
+                '@limit': maxEntries
+            }
+        );
+        return bioHistory;
+    },
+
     addAvatarToDatabase(entry) {
         sqliteService.executeNonQuery(
             `INSERT OR IGNORE INTO ${dbVars.userPrefix}_feed_avatar (created_at, user_id, display_name, owner_id, avatar_name, current_avatar_image_url, current_avatar_thumbnail_image_url, previous_current_avatar_image_url, previous_current_avatar_thumbnail_image_url) VALUES (@created_at, @user_id, @display_name, @owner_id, @avatar_name, @current_avatar_image_url, @current_avatar_thumbnail_image_url, @previous_current_avatar_image_url, @previous_current_avatar_thumbnail_image_url)`,

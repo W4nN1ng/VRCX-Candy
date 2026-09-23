@@ -233,6 +233,31 @@ describe('UserDialogInfoTab.vue', () => {
 
             expect(creditsSpy).toHaveBeenCalledTimes(0);
         });
+
+        test('onTabActivated loads the bio history for the dialog user', async () => {
+            const wrapper = mountComponent({
+                userDialog: { bioHistoryLoaded: false }
+            });
+            const userStore = useUserStore();
+
+            wrapper.vm.onTabActivated();
+            await flushPromises();
+
+            expect(userStore.loadUserDialogBioHistory).toHaveBeenCalledTimes(1);
+            expect(userStore.loadUserDialogBioHistory).toHaveBeenCalledWith('usr_target');
+        });
+
+        test('onTabActivated keeps an already loaded bio history', async () => {
+            const wrapper = mountComponent({
+                userDialog: { bioHistoryLoaded: true }
+            });
+            const userStore = useUserStore();
+
+            wrapper.vm.onTabActivated();
+            await flushPromises();
+
+            expect(userStore.loadUserDialogBioHistory).not.toHaveBeenCalled();
+        });
     });
 
     describe('dom rendering', () => {
@@ -241,6 +266,53 @@ describe('UserDialogInfoTab.vue', () => {
 
             expect(wrapper.find('instance-action-bar-stub').exists()).toBe(true);
             expect(wrapper.find('spinner-stub').exists()).toBe(true);
+        });
+
+        test('renders the previous bio next to the current one', async () => {
+            const wrapper = mountComponent({
+                userDialog: {
+                    publicProfileRef: { bio: '现在的简介' },
+                    bioHistory: [
+                        {
+                            rowId: 1,
+                            created_at: '2026-09-20T00:00:00.000Z',
+                            userId: 'usr_target',
+                            displayName: 'Target',
+                            bio: '现在的简介',
+                            previousBio: '以前的简介'
+                        }
+                    ],
+                    bioHistoryLoaded: true
+                }
+            });
+            await flushPromises();
+
+            expect(wrapper.text()).toContain('现在的简介');
+            expect(wrapper.text()).toContain('以前的简介');
+            expect(wrapper.text()).toContain('dialog.user.bio_history.previous');
+
+            const historyButton = wrapper.find('button-stub[title="dialog.user.bio_history.header"]');
+            const historyDialog = wrapper.find('bio-history-dialog-stub');
+            expect(historyButton.exists()).toBe(true);
+            expect(historyDialog.exists()).toBe(true);
+            expect(historyDialog.attributes('visible')).toBe('false');
+
+            await historyButton.trigger('click');
+
+            expect(historyDialog.attributes('visible')).toBe('true');
+        });
+
+        test('hides the previous bio block without recorded changes', async () => {
+            const wrapper = mountComponent({
+                userDialog: {
+                    publicProfileRef: { bio: '只有一条简介' }
+                }
+            });
+            await flushPromises();
+
+            expect(wrapper.text()).toContain('只有一条简介');
+            expect(wrapper.text()).not.toContain('dialog.user.bio_history.previous');
+            expect(wrapper.find('button-stub[title="dialog.user.bio_history.header"]').exists()).toBe(false);
         });
     });
 });

@@ -1,5 +1,6 @@
 export * from './base/array';
 export * from './base/devtool';
+export * from './base/diff';
 export * from './base/format';
 export { formatDateFilter } from '../../coordinators/dateCoordinator';
 export * from './base/string';

@@ -1570,6 +1570,21 @@
                 "header": "编辑线上备注和本地备注",
                 "cancel": "取消",
                 "confirm": "确定"
+            },
+            "bio_history": {
+                "header": "简介历史",
+                "current": "当前简介",
+                "previous": "上一条简介",
+                "next": "新简介",
+                "updated": "更新于 {time}",
+                "changes": "共记录 {count} 次修改",
+                "version": "第 {number} 次修改",
+                "show_diff": "显示差异",
+                "show_full": "显示完整文本",
+                "loading": "加载中...",
+                "empty": "还没有记录到简介修改",
+                "empty_hint": "VRCX 运行期间，好友更新简介时就会被记录下来",
+                "close": "关闭"
             }
         },
         "world": {

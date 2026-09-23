@@ -1587,6 +1587,21 @@
                 "header": "Megjegyzés és memó szerkesztése",
                 "cancel": "Mégse",
                 "confirm": "Megerősítés"
+            },
+            "bio_history": {
+                "header": "Bio History",
+                "current": "Current Bio",
+                "previous": "Previous Bio",
+                "next": "New Bio",
+                "updated": "Updated {time}",
+                "changes": "{count} recorded changes",
+                "version": "Change {number}",
+                "show_diff": "Show Differences",
+                "show_full": "Show Full Text",
+                "loading": "Loading...",
+                "empty": "No bio changes recorded yet",
+                "empty_hint": "VRCX records a change whenever a friend updates their bio while VRCX is running",
+                "close": "Close"
             }
         },
         "world": {
