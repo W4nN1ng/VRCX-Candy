@@ -1,0 +1,114 @@
+From e5a9a76a73c421251908f82c34e94ee6e362c3b5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=E6=99=9A=E5=87=9DW4nN1ng?= <wn2276519232@gmail.com>
+Date: Wed, 23 Sep 2026 12:11:12 +0800
+Subject: [PATCH 2/2] Leave empty bio transitions out of the bio history
+
+Checking a real database showed 81 of 176 feed_bio rows record a transition
+to an empty bio, 30 distinct friends inside the same 13 seconds. The API
+intermittently returns friends with an empty bio during a list refresh, so
+those rows are read artifacts rather than players clearing their profile.
+
+The history query now skips them so the profile dialog does not present that
+noise as edits, and the change recorder keeps requiring both sides to be non
+empty.
+---
+ .../__tests__/userEventCoordinator.test.js       | 16 ++++------------
+ src/coordinators/userEventCoordinator.js         | 11 ++++++-----
+ src/services/database/__tests__/feed.test.js     |  2 ++
+ src/services/database/feed.js                    |  5 ++++-
+ 4 files changed, 16 insertions(+), 18 deletions(-)
+
+diff --git a/src/coordinators/__tests__/userEventCoordinator.test.js b/src/coordinators/__tests__/userEventCoordinator.test.js
+index 7777bd7c..1f5f20c2 100644
+--- a/src/coordinators/__tests__/userEventCoordinator.test.js
++++ b/src/coordinators/__tests__/userEventCoordinator.test.js
+@@ -91,24 +91,16 @@ describe('runHandleUserUpdateFlow bio changes', () => {
+         });
+     });
+ 
+-    test('records a bio that was set for the first time', async () => {
++    test('ignores a bio that was set from an empty one', async () => {
+         await runHandleUserUpdateFlow(bioRef(), { bio: ['你好', ''] }, { now, nowIso });
+ 
+-        expect(addBioToDatabase).toHaveBeenCalledTimes(1);
+-        expect(addBioToDatabase.mock.calls[0][0]).toMatchObject({
+-            bio: '你好',
+-            previousBio: ''
+-        });
++        expect(addBioToDatabase).not.toHaveBeenCalled();
+     });
+ 
+-    test('records a bio that was cleared', async () => {
++    test('ignores a bio that looks cleared, the api reports empty bios on refresh', async () => {
+         await runHandleUserUpdateFlow(bioRef(), { bio: ['', '你好'] }, { now, nowIso });
+ 
+-        expect(addBioToDatabase).toHaveBeenCalledTimes(1);
+-        expect(addBioToDatabase.mock.calls[0][0]).toMatchObject({
+-            bio: '',
+-            previousBio: '你好'
+-        });
++        expect(addBioToDatabase).not.toHaveBeenCalled();
+     });
+ 
+     test('ignores an unchanged bio', async () => {
+diff --git a/src/coordinators/userEventCoordinator.js b/src/coordinators/userEventCoordinator.js
+index a7ac9e16..7499cff8 100644
+--- a/src/coordinators/userEventCoordinator.js
++++ b/src/coordinators/userEventCoordinator.js
+@@ -230,11 +230,12 @@ export async function runHandleUserUpdateFlow(ref, props, { now = Date.now, nowI
+         feedStore.addFeedEntry(feed);
+         database.addStatusToDatabase(feed);
+     }
+-    // props.bio is a [new, previous] tuple and only present when the two differ,
+-    // so an empty side is a real change (bio set for the first time / bio cleared)
+-    if (props.bio && props.bio[0] !== props.bio[1]) {
+-        const bio = String(props.bio[0] ?? '');
+-        const previousBio = String(props.bio[1] ?? '');
++    // Both sides must be non empty. The API intermittently returns users with an
++    // empty bio during friend list refreshes, which would otherwise be recorded as
++    // dozens of friends "clearing" their bio within a few seconds.
++    if (props.bio && props.bio[0] && props.bio[1] && props.bio[0] !== props.bio[1]) {
++        const bio = String(props.bio[0]);
++        const previousBio = String(props.bio[1]);
+         feed = {
+             created_at: nowIso(),
+             type: 'Bio',
+diff --git a/src/services/database/__tests__/feed.test.js b/src/services/database/__tests__/feed.test.js
+index 7abbce4c..1f9bc48b 100644
+--- a/src/services/database/__tests__/feed.test.js
++++ b/src/services/database/__tests__/feed.test.js
+@@ -47,6 +47,8 @@ describe('feed.getBioHistoryForUserId', () => {
+         ]);
+         expect(mocks.execute.mock.calls[0][1]).toContain('usr123_feed_bio');
+         expect(mocks.execute.mock.calls[0][1]).toContain('WHERE user_id = @user_id');
++        expect(mocks.execute.mock.calls[0][1]).toContain("AND bio != ''");
++        expect(mocks.execute.mock.calls[0][1]).toContain("AND previous_bio != ''");
+         expect(mocks.execute.mock.calls[0][1]).toContain('ORDER BY created_at ASC, id ASC');
+         expect(mocks.execute.mock.calls[0][2]).toMatchObject({ '@user_id': 'usr_1' });
+     });
+diff --git a/src/services/database/feed.js b/src/services/database/feed.js
+index 212e044c..446c114d 100644
+--- a/src/services/database/feed.js
++++ b/src/services/database/feed.js
+@@ -50,6 +50,9 @@ const feed = {
+     /**
+      * Loads the recorded bio changes of a single user, oldest change first.
+      *
++     * Changes involving an empty bio are left out: friend list refreshes intermittently
++     * report an empty bio, which older VRCX versions stored as a real change.
++     *
+      * @param {string} userId - VRChat user id.
+      * @param {number} maxEntries - Maximum number of changes to return.
+      * @returns {Promise<object[]>} Bio change entries with bio and previousBio.
+@@ -67,7 +70,7 @@ const feed = {
+                     previousBio: dbRow[5] ?? ''
+                 });
+             },
+-            `SELECT id, created_at, user_id, display_name, bio, previous_bio FROM ${dbVars.userPrefix}_feed_bio WHERE user_id = @user_id ORDER BY created_at ASC, id ASC LIMIT @limit`,
++            `SELECT id, created_at, user_id, display_name, bio, previous_bio FROM ${dbVars.userPrefix}_feed_bio WHERE user_id = @user_id AND bio != '' AND previous_bio != '' ORDER BY created_at ASC, id ASC LIMIT @limit`,
+             {
+                 '@user_id': userId,
+                 '@limit': maxEntries
+-- 
+2.55.0.windows.3
+

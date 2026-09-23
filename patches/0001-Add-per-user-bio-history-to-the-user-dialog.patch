@@ -1,0 +1,1615 @@
+From 53a45002e58b04d3e13447e20d4eba61af120b6d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=E6=99=9A=E5=87=9DW4nN1ng?= <wn2276519232@gmail.com>
+Date: Wed, 23 Sep 2026 11:55:14 +0800
+Subject: [PATCH 1/2] Add per user bio history to the user dialog
+
+VRCX already wrote every detected bio change into the feed_bio table but
+only surfaced it as a global feed stream, so a player profile could never
+answer "what did their bio say before?".
+
+The Info tab now shows the previous bio directly under the current one and
+a new Bio History dialog lists every recorded change with a word level diff
+and the time it was seen. Recording no longer skips the transitions to and
+from an empty bio, which previously dropped the first bio and cleared bios.
+
+formatDifference moves to shared/utils/base/diff.js so the feed and the new
+dialog share one implementation, and its marker classes move to globals.css.
+---
+ .../dialogs/UserDialog/BioHistoryDialog.vue   | 153 ++++++++++++++++++
+ .../dialogs/UserDialog/UserDialogInfoTab.vue  |  45 +++++-
+ .../__tests__/UserDialogInfoTab.test.js       |  72 +++++++++
+ .../__tests__/userEventCoordinator.test.js    | 151 +++++++++++++++++
+ src/coordinators/userCoordinator.js           |   2 +
+ src/coordinators/userEventCoordinator.js      |  19 ++-
+ src/localization/cs.json                      |  15 ++
+ src/localization/en.json                      |  15 ++
+ src/localization/es.json                      |  15 ++
+ src/localization/fr.json                      |  15 ++
+ src/localization/hu.json                      |  15 ++
+ src/localization/ja.json                      |  15 ++
+ src/localization/ko.json                      |  15 ++
+ src/localization/pl.json                      |  15 ++
+ src/localization/pt.json                      |  15 ++
+ src/localization/ru.json                      |  15 ++
+ src/localization/th.json                      |  15 ++
+ src/localization/vi.json                      |  15 ++
+ src/localization/zh-CN.json                   |  15 ++
+ src/localization/zh-TW.json                   |  15 ++
+ src/services/database/__tests__/feed.test.js  |  93 +++++++++++
+ src/services/database/feed.js                 |  29 ++++
+ src/services/database/index.js                |   3 +
+ src/shared/utils/base/__tests__/diff.test.js  |  45 ++++++
+ src/shared/utils/base/diff.js                 | 130 +++++++++++++++
+ src/shared/utils/index.js                     |   1 +
+ src/stores/user.js                            |  37 ++++-
+ src/styles/globals.css                        |  20 +++
+ src/views/Feed/Feed.vue                       |  17 --
+ src/views/Feed/__tests__/columns.test.js      |  15 +-
+ src/views/Feed/columns.jsx                    | 118 +-------------
+ 31 files changed, 1007 insertions(+), 153 deletions(-)
+ create mode 100644 src/components/dialogs/UserDialog/BioHistoryDialog.vue
+ create mode 100644 src/coordinators/__tests__/userEventCoordinator.test.js
+ create mode 100644 src/services/database/__tests__/feed.test.js
+ create mode 100644 src/shared/utils/base/__tests__/diff.test.js
+ create mode 100644 src/shared/utils/base/diff.js
+
+diff --git a/src/components/dialogs/UserDialog/BioHistoryDialog.vue b/src/components/dialogs/UserDialog/BioHistoryDialog.vue
+new file mode 100644
+index 00000000..b1afdfc4
+--- /dev/null
++++ b/src/components/dialogs/UserDialog/BioHistoryDialog.vue
+@@ -0,0 +1,153 @@
++<template>
++    <Dialog
++        :open="props.visible"
++        @update:open="
++            (open) => {
++                if (!open) cancel();
++            }
++        ">
++        <DialogContent class="x-dialog sm:max-w-160 translate-y-0" style="top: 8vh" :show-close-button="false">
++            <DialogHeader>
++                <DialogTitle>
++                    {{ t('dialog.user.bio_history.header') }}
++                    <span v-if="userDialog.ref?.displayName" class="text-muted-foreground font-normal">
++                        · {{ userDialog.ref.displayName }}
++                    </span>
++                </DialogTitle>
++            </DialogHeader>
++
++            <div class="flex min-h-0 flex-col gap-2.5">
++                <div class="rounded-xl bg-muted p-3">
++                    <div class="mb-2 flex items-center justify-between border-b border-muted-foreground/20 pb-2">
++                        <span class="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{{
++                            t('dialog.user.bio_history.current')
++                        }}</span>
++                        <span v-if="lastChangedAt" class="text-xs text-muted-foreground">
++                            {{ t('dialog.user.bio_history.updated', { time: timeAgo(lastChangedAt) }) }}
++                        </span>
++                    </div>
++                    <pre
++                        class="text-xs font-[inherit]"
++                        style="white-space: pre-wrap; max-height: 160px; overflow-y: auto"
++                        >{{ currentBio || '—' }}</pre>
++                </div>
++
++                <div class="flex items-center justify-between gap-2">
++                    <span class="text-xs text-muted-foreground">
++                        {{ t('dialog.user.bio_history.changes', { count: history.length }) }}
++                    </span>
++                    <Button
++                        v-if="history.length"
++                        variant="ghost"
++                        size="sm"
++                        class="h-6 text-xs"
++                        @click="showFullText = !showFullText">
++                        <GitCompareArrows v-if="showFullText" class="mr-1 h-3.5 w-3.5" />
++                        <AlignLeft v-else class="mr-1 h-3.5 w-3.5" />
++                        {{
++                            showFullText
++                                ? t('dialog.user.bio_history.show_diff')
++                                : t('dialog.user.bio_history.show_full')
++                        }}
++                    </Button>
++                </div>
++
++                <ScrollArea class="max-h-[45vh] pr-2">
++                    <div v-if="userDialog.bioHistoryLoading" class="flex items-center gap-2 p-3 text-xs">
++                        <Spinner class="size-3.5" />
++                        <span class="text-muted-foreground">{{ t('dialog.user.bio_history.loading') }}</span>
++                    </div>
++                    <div
++                        v-else-if="!history.length"
++                        class="rounded-xl border border-dashed border-muted-foreground/30 p-4">
++                        <span class="text-xs text-muted-foreground">{{ t('dialog.user.bio_history.empty') }}</span>
++                        <br />
++                        <span class="text-[11px] text-muted-foreground">{{
++                            t('dialog.user.bio_history.empty_hint')
++                        }}</span>
++                    </div>
++                    <div v-else class="flex flex-col gap-2.5">
++                        <article
++                            v-for="(entry, index) in history"
++                            :key="entry.rowId ?? `${entry.created_at}-${index}`"
++                            class="rounded-xl border border-muted-foreground/20 p-3">
++                            <div class="mb-2 flex items-center justify-between gap-2">
++                                <span class="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
++                                    {{ t('dialog.user.bio_history.version', { number: history.length - index }) }}
++                                </span>
++                                <TooltipWrapper side="left" :content="formatDateFilter(entry.created_at, 'long')">
++                                    <span class="text-xs text-muted-foreground">{{ timeAgo(entry.created_at) }}</span>
++                                </TooltipWrapper>
++                            </div>
++
++                            <template v-if="showFullText">
++                                <div class="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
++                                    {{ t('dialog.user.bio_history.previous') }}
++                                </div>
++                                <pre
++                                    class="mb-2 text-xs font-[inherit] text-muted-foreground"
++                                    style="white-space: pre-wrap"
++                                    >{{ entry.previousBio || '—' }}</pre>
++                                <div class="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
++                                    {{ t('dialog.user.bio_history.next') }}
++                                </div>
++                                <pre class="text-xs font-[inherit]" style="white-space: pre-wrap">{{
++                                    entry.bio || '—'
++                                }}</pre>
++                            </template>
++                            <pre
++                                v-else
++                                class="text-xs leading-5.5 font-[inherit]"
++                                style="white-space: pre-wrap"
++                                v-html="formatDifference(entry.previousBio, entry.bio)"></pre>
++                        </article>
++                    </div>
++                </ScrollArea>
++            </div>
++
++            <DialogFooter>
++                <Button variant="secondary" @click="cancel">{{ t('dialog.user.bio_history.close') }}</Button>
++            </DialogFooter>
++        </DialogContent>
++    </Dialog>
++</template>
++
++<script setup>
++    import { computed, ref } from 'vue';
++    import { AlignLeft, GitCompareArrows } from 'lucide-vue-next';
++    import { Button } from '@/components/ui/button';
++    import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
++    import { ScrollArea } from '@/components/ui/scroll-area';
++    import { Spinner } from '@/components/ui/spinner';
++    import { storeToRefs } from 'pinia';
++    import { useI18n } from 'vue-i18n';
++
++    import { formatDateFilter, formatDifference, timeAgo } from '../../../shared/utils';
++    import { useUserStore } from '../../../stores';
++
++    const { userDialog } = storeToRefs(useUserStore());
++
++    const { t } = useI18n();
++
++    const props = defineProps({
++        visible: {
++            type: Boolean,
++            required: true
++        }
++    });
++
++    const emit = defineEmits(['update:visible']);
++
++    const showFullText = ref(false);
++
++    // stored oldest first, shown newest first
++    const history = computed(() => userDialog.value.bioHistory.slice().reverse());
++
++    const currentBio = computed(() => String(userDialog.value.publicProfileRef?.bio ?? ''));
++
++    const lastChangedAt = computed(() => (history.value.length ? history.value[0].created_at : ''));
++
++    function cancel() {
++        emit('update:visible', false);
++    }
++</script>
+diff --git a/src/components/dialogs/UserDialog/UserDialogInfoTab.vue b/src/components/dialogs/UserDialog/UserDialogInfoTab.vue
+index ca490110..2ca5af63 100644
+--- a/src/components/dialogs/UserDialog/UserDialogInfoTab.vue
++++ b/src/components/dialogs/UserDialog/UserDialogInfoTab.vue
+@@ -142,6 +142,15 @@
+                             {{ t('dialog.user.info.bio') }}
+                         </span>
+                         <div class="flex items-center gap-1">
++                            <Button
++                                v-if="userDialog.bioHistory.length"
++                                class="h-5 w-5"
++                                size="icon-sm"
++                                variant="ghost"
++                                :title="t('dialog.user.bio_history.header')"
++                                @click="isBioHistoryDialogVisible = true">
++                                <History class="h-3 w-3" :style="{ color: userDialog.theme.iconColor }" />
++                            </Button>
+                             <Button
+                                 v-if="translationApi && userDialog.publicProfileRef?.bio"
+                                 class="h-5 w-5"
+@@ -165,6 +174,22 @@
+                         class="text-xs font-[inherit]"
+                         style="white-space: pre-wrap; max-height: 210px; overflow-y: auto"
+                         >{{ bioCache.translated || userDialog.publicProfileRef?.bio || '—' }}</pre>
++                    <div v-if="previousBio !== null" class="mt-2 border-t border-muted-foreground/20 pt-2">
++                        <div class="flex items-center justify-between gap-2">
++                            <span
++                                class="text-[10px] font-bold uppercase tracking-wide text-muted-foreground cursor-pointer hover:text-foreground"
++                                @click="isBioHistoryDialogVisible = true">
++                                {{ t('dialog.user.bio_history.previous') }}
++                            </span>
++                            <span class="text-[10px] text-muted-foreground">{{
++                                timeAgo(lastBioChange.created_at)
++                            }}</span>
++                        </div>
++                        <pre
++                            class="text-xs font-[inherit] text-muted-foreground"
++                            style="white-space: pre-wrap; max-height: 90px; overflow-y: auto"
++                            >{{ previousBio || '—' }}</pre>
++                    </div>
+                     <div
+                         v-if="userDialog.publicProfileRef?.bioLinks && userDialog.publicProfileRef?.bioLinks.length"
+                         class="flex flex-wrap items-center gap-1.5 mt-2">
+@@ -442,13 +467,14 @@
+         </div>
+     </div>
+     <EditNoteAndMemoDialog v-model:visible="isEditNoteAndMemoDialogVisible" />
++    <BioHistoryDialog v-model:visible="isBioHistoryDialogVisible" />
+ </template>
+ 
+ <script setup>
+-    import { Info, Languages, Pencil, Trash2, User } from 'lucide-vue-next';
++    import { History, Info, Languages, Pencil, Trash2, User } from 'lucide-vue-next';
+     import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+     import IconFrame from '@/components/IconFrame.vue';
+-    import { ref, watch } from 'vue';
++    import { computed, ref, watch } from 'vue';
+     import { Button } from '@/components/ui/button';
+     import { Spinner } from '@/components/ui/spinner';
+     import { storeToRefs } from 'pinia';
+@@ -483,6 +509,7 @@
+     import { showUserDialog } from '../../../coordinators/userCoordinator';
+ 
+     import EditNoteAndMemoDialog from './EditNoteAndMemoDialog.vue';
++    import BioHistoryDialog from './BioHistoryDialog.vue';
+ 
+     const { t } = useI18n();
+ 
+@@ -493,7 +520,7 @@
+     const { bioLanguage, translationApi, translationApiType } = storeToRefs(useAdvancedSettingsStore());
+     const { translateText } = useAdvancedSettingsStore();
+     const { userDialog, currentUser } = storeToRefs(useUserStore());
+-    const { showEditProfileDialog } = useUserStore();
++    const { showEditProfileDialog, loadUserDialogBioHistory } = useUserStore();
+     const { fullscreenImageDialog } = storeToRefs(useGalleryStore());
+ 
+     const { lastLocation } = storeToRefs(useLocationStore());
+@@ -505,9 +532,18 @@
+     });
+ 
+     const isEditNoteAndMemoDialogVisible = ref(false);
++    const isBioHistoryDialogVisible = ref(false);
+     const vrchatCredit = ref(null);
+     const translateLoading = ref(false);
+ 
++    // bioHistory is stored oldest first, so the last entry holds the previous bio
++    const lastBioChange = computed(() => {
++        const bioHistory = userDialog.value.bioHistory;
++        return bioHistory.length ? bioHistory[bioHistory.length - 1] : null;
++    });
++
++    const previousBio = computed(() => (lastBioChange.value ? String(lastBioChange.value.previousBio ?? '') : null));
++
+     watch(
+         () => userDialog.value.loading,
+         () => {
+@@ -526,6 +562,9 @@
+         if (currentUser.value.id === userDialog.value.id && vrchatCredit.value === null) {
+             getVRChatCredits();
+         }
++        if (!userDialog.value.bioHistoryLoaded) {
++            loadUserDialogBioHistory(userDialog.value.id);
++        }
+     }
+ 
+     function showEditNoteAndMemoDialog() {
+diff --git a/src/components/dialogs/UserDialog/__tests__/UserDialogInfoTab.test.js b/src/components/dialogs/UserDialog/__tests__/UserDialogInfoTab.test.js
+index 140be0a0..59c372c1 100644
+--- a/src/components/dialogs/UserDialog/__tests__/UserDialogInfoTab.test.js
++++ b/src/components/dialogs/UserDialog/__tests__/UserDialogInfoTab.test.js
+@@ -233,6 +233,31 @@ describe('UserDialogInfoTab.vue', () => {
+ 
+             expect(creditsSpy).toHaveBeenCalledTimes(0);
+         });
++
++        test('onTabActivated loads the bio history for the dialog user', async () => {
++            const wrapper = mountComponent({
++                userDialog: { bioHistoryLoaded: false }
++            });
++            const userStore = useUserStore();
++
++            wrapper.vm.onTabActivated();
++            await flushPromises();
++
++            expect(userStore.loadUserDialogBioHistory).toHaveBeenCalledTimes(1);
++            expect(userStore.loadUserDialogBioHistory).toHaveBeenCalledWith('usr_target');
++        });
++
++        test('onTabActivated keeps an already loaded bio history', async () => {
++            const wrapper = mountComponent({
++                userDialog: { bioHistoryLoaded: true }
++            });
++            const userStore = useUserStore();
++
++            wrapper.vm.onTabActivated();
++            await flushPromises();
++
++            expect(userStore.loadUserDialogBioHistory).not.toHaveBeenCalled();
++        });
+     });
+ 
+     describe('dom rendering', () => {
+@@ -242,5 +267,52 @@ describe('UserDialogInfoTab.vue', () => {
+             expect(wrapper.find('instance-action-bar-stub').exists()).toBe(true);
+             expect(wrapper.find('spinner-stub').exists()).toBe(true);
+         });
++
++        test('renders the previous bio next to the current one', async () => {
++            const wrapper = mountComponent({
++                userDialog: {
++                    publicProfileRef: { bio: '现在的简介' },
++                    bioHistory: [
++                        {
++                            rowId: 1,
++                            created_at: '2026-09-20T00:00:00.000Z',
++                            userId: 'usr_target',
++                            displayName: 'Target',
++                            bio: '现在的简介',
++                            previousBio: '以前的简介'
++                        }
++                    ],
++                    bioHistoryLoaded: true
++                }
++            });
++            await flushPromises();
++
++            expect(wrapper.text()).toContain('现在的简介');
++            expect(wrapper.text()).toContain('以前的简介');
++            expect(wrapper.text()).toContain('dialog.user.bio_history.previous');
++
++            const historyButton = wrapper.find('button-stub[title="dialog.user.bio_history.header"]');
++            const historyDialog = wrapper.find('bio-history-dialog-stub');
++            expect(historyButton.exists()).toBe(true);
++            expect(historyDialog.exists()).toBe(true);
++            expect(historyDialog.attributes('visible')).toBe('false');
++
++            await historyButton.trigger('click');
++
++            expect(historyDialog.attributes('visible')).toBe('true');
++        });
++
++        test('hides the previous bio block without recorded changes', async () => {
++            const wrapper = mountComponent({
++                userDialog: {
++                    publicProfileRef: { bio: '只有一条简介' }
++                }
++            });
++            await flushPromises();
++
++            expect(wrapper.text()).toContain('只有一条简介');
++            expect(wrapper.text()).not.toContain('dialog.user.bio_history.previous');
++            expect(wrapper.find('button-stub[title="dialog.user.bio_history.header"]').exists()).toBe(false);
++        });
+     });
+ });
+diff --git a/src/coordinators/__tests__/userEventCoordinator.test.js b/src/coordinators/__tests__/userEventCoordinator.test.js
+new file mode 100644
+index 00000000..7777bd7c
+--- /dev/null
++++ b/src/coordinators/__tests__/userEventCoordinator.test.js
+@@ -0,0 +1,151 @@
++import { beforeEach, describe, expect, test, vi } from 'vitest';
++
++const { addBioToDatabase, addEntry, addFeedEntry, queueFeedNoty, loadUserDialogBioHistory, friend, userDialog } =
++    vi.hoisted(() => ({
++        addBioToDatabase: vi.fn(),
++        addEntry: vi.fn(),
++        addFeedEntry: vi.fn(),
++        queueFeedNoty: vi.fn(),
++        loadUserDialogBioHistory: vi.fn(),
++        friend: { id: 'usr_1', name: 'Tester' },
++        userDialog: { visible: false, id: '' }
++    }));
++
++vi.mock('../../shared/utils', () => ({
++    getGroupName: vi.fn(async () => ''),
++    getWorldName: vi.fn(async () => ''),
++    parseLocation: (value) => ({ tag: value })
++}));
++
++vi.mock('../../services/appConfig', () => ({
++    AppDebug: {}
++}));
++
++vi.mock('../../services/database', () => ({
++    database: {
++        addBioToDatabase,
++        addStatusToDatabase: vi.fn(),
++        addGPSToDatabase: vi.fn(),
++        addAvatarToDatabase: vi.fn()
++    }
++}));
++
++vi.mock('../avatarCoordinator', () => ({
++    getAvatarName: vi.fn(async () => ({ ownerId: '', avatarName: '' }))
++}));
++
++vi.mock('../../stores/feed', () => ({ useFeedStore: () => ({ addFeedEntry }) }));
++vi.mock('../../stores/friend', () => ({
++    useFriendStore: () => ({
++        friends: {
++            get: (id) => (id === 'usr_1' ? friend : undefined)
++        }
++    })
++}));
++vi.mock('../../stores/group', () => ({ useGroupStore: () => ({}) }));
++vi.mock('../../stores/instance', () => ({ useInstanceStore: () => ({}) }));
++vi.mock('../../stores/location', () => ({ useLocationStore: () => ({}) }));
++vi.mock('../../stores/notification', () => ({ useNotificationStore: () => ({ queueFeedNoty }) }));
++vi.mock('../../stores/sharedFeed', () => ({ useSharedFeedStore: () => ({ addEntry }) }));
++vi.mock('../../stores/user', () => ({
++    useUserStore: () => ({
++        state: {},
++        userDialog,
++        applyUserDialogLocation: vi.fn(),
++        checkNote: vi.fn(),
++        loadUserDialogBioHistory
++    })
++}));
++vi.mock('../../stores/world', () => ({ useWorldStore: () => ({}) }));
++
++import { runHandleUserUpdateFlow } from '../userEventCoordinator';
++
++const now = () => 1000;
++const nowIso = () => '2026-09-23T00:00:00.000Z';
++
++function bioRef() {
++    return { id: 'usr_1', displayName: 'Tester' };
++}
++
++describe('runHandleUserUpdateFlow bio changes', () => {
++    beforeEach(() => {
++        addBioToDatabase.mockClear();
++        addEntry.mockClear();
++        addFeedEntry.mockClear();
++        queueFeedNoty.mockClear();
++        loadUserDialogBioHistory.mockClear();
++        userDialog.visible = false;
++        userDialog.id = '';
++    });
++
++    test('records a change between two non empty bios', async () => {
++        await runHandleUserUpdateFlow(bioRef(), { bio: ['我不喜欢你', '我喜欢你'] }, { now, nowIso });
++
++        expect(addBioToDatabase).toHaveBeenCalledWith({
++            created_at: nowIso(),
++            type: 'Bio',
++            userId: 'usr_1',
++            displayName: 'Tester',
++            bio: '我不喜欢你',
++            previousBio: '我喜欢你'
++        });
++    });
++
++    test('records a bio that was set for the first time', async () => {
++        await runHandleUserUpdateFlow(bioRef(), { bio: ['你好', ''] }, { now, nowIso });
++
++        expect(addBioToDatabase).toHaveBeenCalledTimes(1);
++        expect(addBioToDatabase.mock.calls[0][0]).toMatchObject({
++            bio: '你好',
++            previousBio: ''
++        });
++    });
++
++    test('records a bio that was cleared', async () => {
++        await runHandleUserUpdateFlow(bioRef(), { bio: ['', '你好'] }, { now, nowIso });
++
++        expect(addBioToDatabase).toHaveBeenCalledTimes(1);
++        expect(addBioToDatabase.mock.calls[0][0]).toMatchObject({
++            bio: '',
++            previousBio: '你好'
++        });
++    });
++
++    test('ignores an unchanged bio', async () => {
++        await runHandleUserUpdateFlow(bioRef(), { bio: ['你好', '你好'] }, { now, nowIso });
++
++        expect(addBioToDatabase).not.toHaveBeenCalled();
++    });
++
++    test('ignores updates for users that are not friends', async () => {
++        await runHandleUserUpdateFlow({ id: 'usr_2', displayName: 'Stranger' }, { bio: ['a', 'b'] }, { now, nowIso });
++
++        expect(addBioToDatabase).not.toHaveBeenCalled();
++    });
++
++    test('reloads the bio history of an open dialog', async () => {
++        userDialog.visible = true;
++        userDialog.id = 'usr_1';
++
++        await runHandleUserUpdateFlow(bioRef(), { bio: ['新简介', '旧简介'] }, { now, nowIso });
++
++        expect(loadUserDialogBioHistory).toHaveBeenCalledWith('usr_1');
++    });
++
++    test('does not reload the bio history of another user', async () => {
++        userDialog.visible = true;
++        userDialog.id = 'usr_9';
++
++        await runHandleUserUpdateFlow(bioRef(), { bio: ['新简介', '旧简介'] }, { now, nowIso });
++
++        expect(loadUserDialogBioHistory).not.toHaveBeenCalled();
++    });
++
++    test('still emits the feed entry for a bio change', async () => {
++        await runHandleUserUpdateFlow(bioRef(), { bio: ['b', 'a'] }, { now, nowIso });
++
++        expect(queueFeedNoty).toHaveBeenCalledTimes(1);
++        expect(addEntry).toHaveBeenCalledTimes(1);
++        expect(addFeedEntry).toHaveBeenCalledTimes(1);
++    });
++});
+diff --git a/src/coordinators/userCoordinator.js b/src/coordinators/userCoordinator.js
+index 3601a2cc..e0b00f4c 100644
+--- a/src/coordinators/userCoordinator.js
++++ b/src/coordinators/userCoordinator.js
+@@ -292,6 +292,8 @@ export function showUserDialog(userId) {
+     D.publicProfileRef = {};
+     D.memo = '';
+     D.note = '';
++    D.bioHistory = [];
++    D.bioHistoryLoaded = false;
+     getUserMemo(userId).then((memo) => {
+         if (memo.userId === userId) {
+             D.memo = memo.memo;
+diff --git a/src/coordinators/userEventCoordinator.js b/src/coordinators/userEventCoordinator.js
+index 50aa0cd7..a7ac9e16 100644
+--- a/src/coordinators/userEventCoordinator.js
++++ b/src/coordinators/userEventCoordinator.js
+@@ -31,7 +31,7 @@ export async function runHandleUserUpdateFlow(ref, props, { now = Date.now, nowI
+     const notificationStore = useNotificationStore();
+     const sharedFeedStore = useSharedFeedStore();
+ 
+-    const { state, userDialog, applyUserDialogLocation, checkNote } = userStore;
++    const { state, userDialog, applyUserDialogLocation, checkNote, loadUserDialogBioHistory } = userStore;
+ 
+     let feed;
+     let newLocation;
+@@ -230,15 +230,11 @@ export async function runHandleUserUpdateFlow(ref, props, { now = Date.now, nowI
+         feedStore.addFeedEntry(feed);
+         database.addStatusToDatabase(feed);
+     }
+-    if (props.bio && props.bio[0] && props.bio[1]) {
+-        let bio = '';
+-        let previousBio = '';
+-        if (props.bio[0]) {
+-            bio = props.bio[0];
+-        }
+-        if (props.bio[1]) {
+-            previousBio = props.bio[1];
+-        }
++    // props.bio is a [new, previous] tuple and only present when the two differ,
++    // so an empty side is a real change (bio set for the first time / bio cleared)
++    if (props.bio && props.bio[0] !== props.bio[1]) {
++        const bio = String(props.bio[0] ?? '');
++        const previousBio = String(props.bio[1] ?? '');
+         feed = {
+             created_at: nowIso(),
+             type: 'Bio',
+@@ -251,6 +247,9 @@ export async function runHandleUserUpdateFlow(ref, props, { now = Date.now, nowI
+         sharedFeedStore.addEntry(feed);
+         feedStore.addFeedEntry(feed);
+         database.addBioToDatabase(feed);
++        if (userDialog.visible && userDialog.id === ref.id) {
++            loadUserDialogBioHistory(ref.id);
++        }
+     }
+     if (props.note && props.note[0] !== null && props.note[0] !== props.note[1]) {
+         checkNote(ref.id, props.note[0]);
+diff --git a/src/localization/cs.json b/src/localization/cs.json
+index 6dfdab7b..5cf9cb8e 100644
+--- a/src/localization/cs.json
++++ b/src/localization/cs.json
+@@ -650,6 +650,21 @@
+             },
+             "json": {
+                 "header": "JSON"
++            },
++            "bio_history": {
++                "header": "Bio History",
++                "current": "Current Bio",
++                "previous": "Previous Bio",
++                "next": "New Bio",
++                "updated": "Updated {time}",
++                "changes": "{count} recorded changes",
++                "version": "Change {number}",
++                "show_diff": "Show Differences",
++                "show_full": "Show Full Text",
++                "loading": "Loading...",
++                "empty": "No bio changes recorded yet",
++                "empty_hint": "VRCX records a change whenever a friend updates their bio while VRCX is running",
++                "close": "Close"
+             }
+         },
+         "world": {
+diff --git a/src/localization/en.json b/src/localization/en.json
+index 4bc42452..833bf243 100644
+--- a/src/localization/en.json
++++ b/src/localization/en.json
+@@ -1581,6 +1581,21 @@
+                 "header": "Edit Note And Memo",
+                 "cancel": "Cancel",
+                 "confirm": "Confirm"
++            },
++            "bio_history": {
++                "header": "Bio History",
++                "current": "Current Bio",
++                "previous": "Previous Bio",
++                "next": "New Bio",
++                "updated": "Updated {time}",
++                "changes": "{count} recorded changes",
++                "version": "Change {number}",
++                "show_diff": "Show Differences",
++                "show_full": "Show Full Text",
++                "loading": "Loading...",
++                "empty": "No bio changes recorded yet",
++                "empty_hint": "VRCX records a change whenever a friend updates their bio while VRCX is running",
++                "close": "Close"
+             }
+         },
+         "world": {
+diff --git a/src/localization/es.json b/src/localization/es.json
+index b7bcd4c7..1255ab28 100644
+--- a/src/localization/es.json
++++ b/src/localization/es.json
+@@ -759,6 +759,21 @@
+             },
+             "json": {
+                 "header": "JSON"
++            },
++            "bio_history": {
++                "header": "Bio History",
++                "current": "Current Bio",
++                "previous": "Previous Bio",
++                "next": "New Bio",
++                "updated": "Updated {time}",
++                "changes": "{count} recorded changes",
++                "version": "Change {number}",
++                "show_diff": "Show Differences",
++                "show_full": "Show Full Text",
++                "loading": "Loading...",
++                "empty": "No bio changes recorded yet",
++                "empty_hint": "VRCX records a change whenever a friend updates their bio while VRCX is running",
++                "close": "Close"
+             }
+         },
+         "world": {
+diff --git a/src/localization/fr.json b/src/localization/fr.json
+index d3ddcb78..d481deb6 100644
+--- a/src/localization/fr.json
++++ b/src/localization/fr.json
+@@ -900,6 +900,21 @@
+             },
+             "json": {
+                 "header": "JSON"
++            },
++            "bio_history": {
++                "header": "Bio History",
++                "current": "Current Bio",
++                "previous": "Previous Bio",
++                "next": "New Bio",
++                "updated": "Updated {time}",
++                "changes": "{count} recorded changes",
++                "version": "Change {number}",
++                "show_diff": "Show Differences",
++                "show_full": "Show Full Text",
++                "loading": "Loading...",
++                "empty": "No bio changes recorded yet",
++                "empty_hint": "VRCX records a change whenever a friend updates their bio while VRCX is running",
++                "close": "Close"
+             }
+         },
+         "world": {
+diff --git a/src/localization/hu.json b/src/localization/hu.json
+index ba10582c..2a4b5115 100644
+--- a/src/localization/hu.json
++++ b/src/localization/hu.json
+@@ -1587,6 +1587,21 @@
+                 "header": "Megjegyzés és memó szerkesztése",
+                 "cancel": "Mégse",
+                 "confirm": "Megerősítés"
++            },
++            "bio_history": {
++                "header": "Bio History",
++                "current": "Current Bio",
++                "previous": "Previous Bio",
++                "next": "New Bio",
++                "updated": "Updated {time}",
++                "changes": "{count} recorded changes",
++                "version": "Change {number}",
++                "show_diff": "Show Differences",
++                "show_full": "Show Full Text",
++                "loading": "Loading...",
++                "empty": "No bio changes recorded yet",
++                "empty_hint": "VRCX records a change whenever a friend updates their bio while VRCX is running",
++                "close": "Close"
+             }
+         },
+         "world": {
+diff --git a/src/localization/ja.json b/src/localization/ja.json
+index 5590b543..f8330bd2 100644
+--- a/src/localization/ja.json
++++ b/src/localization/ja.json
+@@ -1552,6 +1552,21 @@
+                 "header": "ノートとメモを編集",
+                 "cancel": "キャンセル",
+                 "confirm": "保存"
++            },
++            "bio_history": {
++                "header": "自己紹介の履歴",
++                "current": "現在の自己紹介",
++                "previous": "前の自己紹介",
++                "next": "新しい自己紹介",
++                "updated": "更新 {time}",
++                "changes": "変更 {count} 件",
++                "version": "変更 {number}",
++                "show_diff": "差分を表示",
++                "show_full": "全文を表示",
++                "loading": "読み込み中...",
++                "empty": "自己紹介の変更が記録されていません",
++                "empty_hint": "VRCX 起動中にフレンドが自己紹介を更新すると記録されます",
++                "close": "閉じる"
+             }
+         },
+         "world": {
+diff --git a/src/localization/ko.json b/src/localization/ko.json
+index d76669d3..b9da4fbf 100644
+--- a/src/localization/ko.json
++++ b/src/localization/ko.json
+@@ -596,6 +596,21 @@
+             },
+             "json": {
+                 "header": "JSON"
++            },
++            "bio_history": {
++                "header": "Bio History",
++                "current": "Current Bio",
++                "previous": "Previous Bio",
++                "next": "New Bio",
++                "updated": "Updated {time}",
++                "changes": "{count} recorded changes",
++                "version": "Change {number}",
++                "show_diff": "Show Differences",
++                "show_full": "Show Full Text",
++                "loading": "Loading...",
++                "empty": "No bio changes recorded yet",
++                "empty_hint": "VRCX records a change whenever a friend updates their bio while VRCX is running",
++                "close": "Close"
+             }
+         },
+         "world": {
+diff --git a/src/localization/pl.json b/src/localization/pl.json
+index f4aeecd3..0fc8bd37 100644
+--- a/src/localization/pl.json
++++ b/src/localization/pl.json
+@@ -948,6 +948,21 @@
+                     "last_active": "Ostatnia aktywność",
+                     "friend_order": "Kolejność znajomych"
+                 }
++            },
++            "bio_history": {
++                "header": "Bio History",
++                "current": "Current Bio",
++                "previous": "Previous Bio",
++                "next": "New Bio",
++                "updated": "Updated {time}",
++                "changes": "{count} recorded changes",
++                "version": "Change {number}",
++                "show_diff": "Show Differences",
++                "show_full": "Show Full Text",
++                "loading": "Loading...",
++                "empty": "No bio changes recorded yet",
++                "empty_hint": "VRCX records a change whenever a friend updates their bio while VRCX is running",
++                "close": "Close"
+             }
+         },
+         "world": {
+diff --git a/src/localization/pt.json b/src/localization/pt.json
+index 22fdd4c0..383b4dce 100644
+--- a/src/localization/pt.json
++++ b/src/localization/pt.json
+@@ -1462,6 +1462,21 @@
+                 "header": "Editar Nota e Memo",
+                 "cancel": "Cancelar",
+                 "confirm": "Confirmar"
++            },
++            "bio_history": {
++                "header": "Bio History",
++                "current": "Current Bio",
++                "previous": "Previous Bio",
++                "next": "New Bio",
++                "updated": "Updated {time}",
++                "changes": "{count} recorded changes",
++                "version": "Change {number}",
++                "show_diff": "Show Differences",
++                "show_full": "Show Full Text",
++                "loading": "Loading...",
++                "empty": "No bio changes recorded yet",
++                "empty_hint": "VRCX records a change whenever a friend updates their bio while VRCX is running",
++                "close": "Close"
+             }
+         },
+         "world": {
+diff --git a/src/localization/ru.json b/src/localization/ru.json
+index 100363f4..dcbace3e 100644
+--- a/src/localization/ru.json
++++ b/src/localization/ru.json
+@@ -682,6 +682,21 @@
+             },
+             "json": {
+                 "header": "JSON"
++            },
++            "bio_history": {
++                "header": "Bio History",
++                "current": "Current Bio",
++                "previous": "Previous Bio",
++                "next": "New Bio",
++                "updated": "Updated {time}",
++                "changes": "{count} recorded changes",
++                "version": "Change {number}",
++                "show_diff": "Show Differences",
++                "show_full": "Show Full Text",
++                "loading": "Loading...",
++                "empty": "No bio changes recorded yet",
++                "empty_hint": "VRCX records a change whenever a friend updates their bio while VRCX is running",
++                "close": "Close"
+             }
+         },
+         "world": {
+diff --git a/src/localization/th.json b/src/localization/th.json
+index 60966b89..772c87b1 100644
+--- a/src/localization/th.json
++++ b/src/localization/th.json
+@@ -1390,6 +1390,21 @@
+                 "header": "แก้ไขโน้ตและบันทึกข้อความ",
+                 "cancel": "ยกเลิก",
+                 "confirm": "ยืนยัน"
++            },
++            "bio_history": {
++                "header": "Bio History",
++                "current": "Current Bio",
++                "previous": "Previous Bio",
++                "next": "New Bio",
++                "updated": "Updated {time}",
++                "changes": "{count} recorded changes",
++                "version": "Change {number}",
++                "show_diff": "Show Differences",
++                "show_full": "Show Full Text",
++                "loading": "Loading...",
++                "empty": "No bio changes recorded yet",
++                "empty_hint": "VRCX records a change whenever a friend updates their bio while VRCX is running",
++                "close": "Close"
+             }
+         },
+         "world": {
+diff --git a/src/localization/vi.json b/src/localization/vi.json
+index 91b3ee0e..ccb58cc1 100644
+--- a/src/localization/vi.json
++++ b/src/localization/vi.json
+@@ -585,6 +585,21 @@
+             },
+             "json": {
+                 "header": "JSON"
++            },
++            "bio_history": {
++                "header": "Bio History",
++                "current": "Current Bio",
++                "previous": "Previous Bio",
++                "next": "New Bio",
++                "updated": "Updated {time}",
++                "changes": "{count} recorded changes",
++                "version": "Change {number}",
++                "show_diff": "Show Differences",
++                "show_full": "Show Full Text",
++                "loading": "Loading...",
++                "empty": "No bio changes recorded yet",
++                "empty_hint": "VRCX records a change whenever a friend updates their bio while VRCX is running",
++                "close": "Close"
+             }
+         },
+         "world": {
+diff --git a/src/localization/zh-CN.json b/src/localization/zh-CN.json
+index 0660740c..5e05f0e4 100644
+--- a/src/localization/zh-CN.json
++++ b/src/localization/zh-CN.json
+@@ -1570,6 +1570,21 @@
+                 "header": "编辑线上备注和本地备注",
+                 "cancel": "取消",
+                 "confirm": "确定"
++            },
++            "bio_history": {
++                "header": "简介历史",
++                "current": "当前简介",
++                "previous": "上一条简介",
++                "next": "新简介",
++                "updated": "更新于 {time}",
++                "changes": "共记录 {count} 次修改",
++                "version": "第 {number} 次修改",
++                "show_diff": "显示差异",
++                "show_full": "显示完整文本",
++                "loading": "加载中...",
++                "empty": "还没有记录到简介修改",
++                "empty_hint": "VRCX 运行期间，好友更新简介时就会被记录下来",
++                "close": "关闭"
+             }
+         },
+         "world": {
+diff --git a/src/localization/zh-TW.json b/src/localization/zh-TW.json
+index a7d03547..64878df9 100644
+--- a/src/localization/zh-TW.json
++++ b/src/localization/zh-TW.json
+@@ -1551,6 +1551,21 @@
+                 "header": "編輯備註與備忘",
+                 "cancel": "取消",
+                 "confirm": "確認"
++            },
++            "bio_history": {
++                "header": "個人簡介歷史",
++                "current": "目前個人簡介",
++                "previous": "上一則個人簡介",
++                "next": "新個人簡介",
++                "updated": "更新於 {time}",
++                "changes": "共記錄 {count} 次修改",
++                "version": "第 {number} 次修改",
++                "show_diff": "顯示差異",
++                "show_full": "顯示完整文字",
++                "loading": "載入中...",
++                "empty": "尚未記錄到個人簡介修改",
++                "empty_hint": "VRCX 執行期間，好友更新個人簡介時就會被記錄下來",
++                "close": "關閉"
+             }
+         },
+         "world": {
+diff --git a/src/services/database/__tests__/feed.test.js b/src/services/database/__tests__/feed.test.js
+new file mode 100644
+index 00000000..7abbce4c
+--- /dev/null
++++ b/src/services/database/__tests__/feed.test.js
+@@ -0,0 +1,93 @@
++import { beforeEach, describe, expect, test, vi } from 'vitest';
++
++const mocks = vi.hoisted(() => ({
++    execute: vi.fn(),
++    executeNonQuery: vi.fn()
++}));
++
++vi.mock('../../sqlite.js', () => ({
++    default: {
++        execute: mocks.execute,
++        executeNonQuery: mocks.executeNonQuery
++    }
++}));
++vi.mock('../index.js', () => ({
++    dbVars: {
++        maxTableSize: 500,
++        searchTableSize: 5000,
++        userPrefix: 'usr123'
++    }
++}));
++
++import { feed } from '../feed.js';
++
++describe('feed.getBioHistoryForUserId', () => {
++    beforeEach(() => {
++        mocks.execute.mockReset();
++        mocks.executeNonQuery.mockReset();
++    });
++
++    test('maps rows to bio history entries', async () => {
++        mocks.execute.mockImplementation(async (callback) => {
++            callback([1, '2026-09-23T00:00:00.000Z', 'usr_1', 'Tester', '我不喜欢你', '我喜欢你']);
++            return undefined;
++        });
++
++        const result = await feed.getBioHistoryForUserId('usr_1');
++
++        expect(result).toEqual([
++            {
++                rowId: 1,
++                created_at: '2026-09-23T00:00:00.000Z',
++                userId: 'usr_1',
++                displayName: 'Tester',
++                bio: '我不喜欢你',
++                previousBio: '我喜欢你'
++            }
++        ]);
++        expect(mocks.execute.mock.calls[0][1]).toContain('usr123_feed_bio');
++        expect(mocks.execute.mock.calls[0][1]).toContain('WHERE user_id = @user_id');
++        expect(mocks.execute.mock.calls[0][1]).toContain('ORDER BY created_at ASC, id ASC');
++        expect(mocks.execute.mock.calls[0][2]).toMatchObject({ '@user_id': 'usr_1' });
++    });
++
++    test('turns missing bio columns into empty strings', async () => {
++        mocks.execute.mockImplementation(async (callback) => {
++            callback([2, '2026-09-23T01:00:00.000Z', 'usr_1', 'Tester', null, null]);
++            return undefined;
++        });
++
++        const result = await feed.getBioHistoryForUserId('usr_1');
++
++        expect(result[0]).toMatchObject({ bio: '', previousBio: '' });
++    });
++
++    test('honours the entry limit', async () => {
++        mocks.execute.mockImplementation(async () => undefined);
++
++        await feed.getBioHistoryForUserId('usr_1', 10);
++
++        expect(mocks.execute.mock.calls[0][2]).toMatchObject({ '@limit': 10 });
++    });
++});
++
++describe('feed.addBioToDatabase', () => {
++    beforeEach(() => {
++        mocks.executeNonQuery.mockReset();
++    });
++
++    test('binds the bio and the previous bio', async () => {
++        await feed.addBioToDatabase({
++            created_at: '2026-09-23T00:00:00.000Z',
++            userId: 'usr_1',
++            displayName: 'Tester',
++            bio: '新简介',
++            previousBio: '旧简介'
++        });
++
++        expect(mocks.executeNonQuery.mock.calls[0][1]).toMatchObject({
++            '@bio': '新简介',
++            '@previous_bio': '旧简介'
++        });
++    });
++});
+diff --git a/src/services/database/feed.js b/src/services/database/feed.js
+index b727baf7..212e044c 100644
+--- a/src/services/database/feed.js
++++ b/src/services/database/feed.js
+@@ -47,6 +47,35 @@ const feed = {
+         );
+     },
+ 
++    /**
++     * Loads the recorded bio changes of a single user, oldest change first.
++     *
++     * @param {string} userId - VRChat user id.
++     * @param {number} maxEntries - Maximum number of changes to return.
++     * @returns {Promise<object[]>} Bio change entries with bio and previousBio.
++     */
++    async getBioHistoryForUserId(userId, maxEntries = dbVars.maxTableSize) {
++        const bioHistory = [];
++        await sqliteService.execute(
++            (dbRow) => {
++                bioHistory.push({
++                    rowId: dbRow[0],
++                    created_at: dbRow[1],
++                    userId: dbRow[2],
++                    displayName: dbRow[3],
++                    bio: dbRow[4] ?? '',
++                    previousBio: dbRow[5] ?? ''
++                });
++            },
++            `SELECT id, created_at, user_id, display_name, bio, previous_bio FROM ${dbVars.userPrefix}_feed_bio WHERE user_id = @user_id ORDER BY created_at ASC, id ASC LIMIT @limit`,
++            {
++                '@user_id': userId,
++                '@limit': maxEntries
++            }
++        );
++        return bioHistory;
++    },
++
+     addAvatarToDatabase(entry) {
+         sqliteService.executeNonQuery(
+             `INSERT OR IGNORE INTO ${dbVars.userPrefix}_feed_avatar (created_at, user_id, display_name, owner_id, avatar_name, current_avatar_image_url, current_avatar_thumbnail_image_url, previous_current_avatar_image_url, previous_current_avatar_thumbnail_image_url) VALUES (@created_at, @user_id, @display_name, @owner_id, @avatar_name, @current_avatar_image_url, @current_avatar_thumbnail_image_url, @previous_current_avatar_image_url, @previous_current_avatar_thumbnail_image_url)`,
+diff --git a/src/services/database/index.js b/src/services/database/index.js
+index 853209aa..0417f65b 100644
+--- a/src/services/database/index.js
++++ b/src/services/database/index.js
+@@ -68,6 +68,9 @@ const database = {
+         await sqliteService.executeNonQuery(
+             `CREATE TABLE IF NOT EXISTS ${dbVars.userPrefix}_feed_bio (id INTEGER PRIMARY KEY, created_at TEXT, user_id TEXT, display_name TEXT, bio TEXT, previous_bio TEXT)`
+         );
++        await sqliteService.executeNonQuery(
++            `CREATE INDEX IF NOT EXISTS ${dbVars.userPrefix}_feed_bio_user_created_idx ON ${dbVars.userPrefix}_feed_bio (user_id, created_at)`
++        );
+         await sqliteService.executeNonQuery(
+             `CREATE TABLE IF NOT EXISTS ${dbVars.userPrefix}_feed_avatar (id INTEGER PRIMARY KEY, created_at TEXT, user_id TEXT, display_name TEXT, owner_id TEXT, avatar_name TEXT, current_avatar_image_url TEXT, current_avatar_thumbnail_image_url TEXT, previous_current_avatar_image_url TEXT, previous_current_avatar_thumbnail_image_url TEXT)`
+         );
+diff --git a/src/shared/utils/base/__tests__/diff.test.js b/src/shared/utils/base/__tests__/diff.test.js
+new file mode 100644
+index 00000000..77e9f0f7
+--- /dev/null
++++ b/src/shared/utils/base/__tests__/diff.test.js
+@@ -0,0 +1,45 @@
++import { describe, expect, test } from 'vitest';
++
++import { formatDifference } from '../diff';
++
++describe('formatDifference', () => {
++    test('marks added and removed words', () => {
++        const html = formatDifference('我喜欢你', '我不喜欢你');
++
++        expect(html).toContain('x-text-removed');
++        expect(html).toContain('x-text-added');
++    });
++
++    test('keeps shared words unmarked', () => {
++        const html = formatDifference('hello world', 'hello there');
++
++        expect(html).toContain('hello');
++        expect(html).not.toContain('>hello<');
++        expect(html).toContain('x-text-added');
++    });
++
++    test('escapes html before diffing', () => {
++        const html = formatDifference('<img src=x onerror=alert(1)>', 'safe');
++
++        expect(html).not.toContain('<img');
++        expect(html).toContain('&lt;img');
++    });
++
++    test('converts line breaks into br tags', () => {
++        const html = formatDifference('line1\nline2', 'line1\nline3');
++
++        expect(html).toContain('<br>');
++    });
++
++    test('supports custom markers', () => {
++        const html = formatDifference('a b', 'a c', '[+{{text}}]', '[-{{text}}]');
++
++        expect(html).toContain('[-b]');
++        expect(html).toContain('[+c]');
++    });
++
++    test('handles missing input', () => {
++        expect(formatDifference(null, undefined)).toBe('');
++        expect(formatDifference('', 'added')).toContain('x-text-added');
++    });
++});
+diff --git a/src/shared/utils/base/diff.js b/src/shared/utils/base/diff.js
+new file mode 100644
+index 00000000..7b13b52d
+--- /dev/null
++++ b/src/shared/utils/base/diff.js
+@@ -0,0 +1,130 @@
++/**
++ * Word level difference formatter shared by the feed and the bio history views.
++ */
++
++const DEFAULT_MARKER_ADDITION = '<span class="x-text-added">{{text}}</span>';
++const DEFAULT_MARKER_DELETION = '<span class="x-text-removed">{{text}}</span>';
++
++/**
++ * Escape text so it can be injected as HTML while keeping line breaks.
++ *
++ * @param {any} value - Raw text.
++ * @returns {string} Escaped text using `<br>` for line breaks.
++ */
++function escapeForHtml(value) {
++    return String(value ?? '')
++        .replaceAll(/&/g, '&amp;')
++        .replaceAll(/</g, '&lt;')
++        .replaceAll(/>/g, '&gt;')
++        .replaceAll(/"/g, '&quot;')
++        .replaceAll(/'/g, '&#039;')
++        .replaceAll(/\n/g, '<br>');
++}
++
++/**
++ * Format the differences between two strings with HTML tags.
++ *
++ * @param {any} oldString - Previous text.
++ * @param {any} newString - Updated text.
++ * @param {string} [markerAddition] - Template for added text, `{{text}}` is replaced.
++ * @param {string} [markerDeletion] - Template for removed text, `{{text}}` is replaced.
++ * @returns {string} HTML string containing both texts with the differences marked up.
++ */
++function formatDifference(
++    oldString,
++    newString,
++    markerAddition = DEFAULT_MARKER_ADDITION,
++    markerDeletion = DEFAULT_MARKER_DELETION
++) {
++    const escapedOldString = escapeForHtml(oldString);
++    const escapedNewString = escapeForHtml(newString);
++
++    const oldWords = escapedOldString.split(/\s+/).flatMap((word) => word.split(/(<br>)/));
++    const newWords = escapedNewString.split(/\s+/).flatMap((word) => word.split(/(<br>)/));
++
++    function findLongestMatch(oldStart, oldEnd, newStart, newEnd) {
++        let bestOldStart = oldStart;
++        let bestNewStart = newStart;
++        let bestSize = 0;
++
++        const lookup = new Map();
++        for (let i = oldStart; i < oldEnd; i++) {
++            const word = oldWords[i];
++            if (!lookup.has(word)) lookup.set(word, []);
++            lookup.get(word).push(i);
++        }
++
++        for (let j = newStart; j < newEnd; j++) {
++            const word = newWords[j];
++            if (!lookup.has(word)) continue;
++
++            for (const i of lookup.get(word)) {
++                let size = 0;
++                while (i + size < oldEnd && j + size < newEnd && oldWords[i + size] === newWords[j + size]) {
++                    size++;
++                }
++                if (size > bestSize) {
++                    bestOldStart = i;
++                    bestNewStart = j;
++                    bestSize = size;
++                }
++            }
++        }
++
++        return {
++            oldStart: bestOldStart,
++            newStart: bestNewStart,
++            size: bestSize
++        };
++    }
++
++    function buildDiff(oldStart, oldEnd, newStart, newEnd) {
++        const result = [];
++        const match = findLongestMatch(oldStart, oldEnd, newStart, newEnd);
++
++        if (match.size > 0) {
++            // Handle differences before the match
++            if (oldStart < match.oldStart || newStart < match.newStart) {
++                result.push(...buildDiff(oldStart, match.oldStart, newStart, match.newStart));
++            }
++
++            // Add the matched words
++            result.push(oldWords.slice(match.oldStart, match.oldStart + match.size).join(' '));
++
++            // Handle differences after the match
++            if (match.oldStart + match.size < oldEnd || match.newStart + match.size < newEnd) {
++                result.push(...buildDiff(match.oldStart + match.size, oldEnd, match.newStart + match.size, newEnd));
++            }
++        } else {
++            function build(words, start, end, pattern) {
++                const r = [];
++                const ts = words
++                    .slice(start, end)
++                    .filter((w) => w.length > 0)
++                    .join(' ')
++                    .split('<br>');
++                for (let i = 0; i < ts.length; i++) {
++                    if (i > 0) r.push('<br>');
++                    if (ts[i].length < 1) continue;
++                    r.push(pattern.replace('{{text}}', ts[i]));
++                }
++                return r;
++            }
++
++            // Add deletions
++            if (oldStart < oldEnd) result.push(...build(oldWords, oldStart, oldEnd, markerDeletion));
++
++            // Add insertions
++            if (newStart < newEnd) result.push(...build(newWords, newStart, newEnd, markerAddition));
++        }
++
++        return result;
++    }
++
++    return buildDiff(0, oldWords.length, 0, newWords.length)
++        .join(' ')
++        .replace(/<br>[ ]+<br>/g, '<br><br>')
++        .replace(/<br> /g, '<br>');
++}
++
++export { formatDifference };
+diff --git a/src/shared/utils/index.js b/src/shared/utils/index.js
+index 40b79234..c41ee2b9 100644
+--- a/src/shared/utils/index.js
++++ b/src/shared/utils/index.js
+@@ -1,5 +1,6 @@
+ export * from './base/array';
+ export * from './base/devtool';
++export * from './base/diff';
+ export * from './base/format';
+ export { formatDateFilter } from '../../coordinators/dateCoordinator';
+ export * from './base/string';
+diff --git a/src/stores/user.js b/src/stores/user.js
+index ae07cb06..05f69c32 100644
+--- a/src/stores/user.js
++++ b/src/stores/user.js
+@@ -282,7 +282,10 @@ export const useUserStore = defineStore('User', () => {
+         mutualFriendCount: 0,
+         mutualGroupCount: 0,
+         mutualFriends: [],
+-        isMutualFriendsLoading: false
++        isMutualFriendsLoading: false,
++        bioHistory: [],
++        bioHistoryLoading: false,
++        bioHistoryLoaded: false
+     });
+ 
+     const editProfileDialog = ref({
+@@ -604,6 +607,37 @@ export const useUserStore = defineStore('User', () => {
+         D.avatars = array;
+     }
+ 
++    /**
++     * Loads the stored bio changes of a user into the user dialog state.
++     *
++     * @param {string} userId - VRChat user id to load the bio history for.
++     */
++    async function loadUserDialogBioHistory(userId) {
++        const D = userDialog.value;
++        if (!userId || D.id !== userId) {
++            return;
++        }
++        D.bioHistoryLoading = true;
++        try {
++            const bioHistory = await database.getBioHistoryForUserId(userId);
++            // the dialog may have been closed or switched to another user
++            if (userDialog.value.id !== userId) {
++                return;
++            }
++            userDialog.value.bioHistory = bioHistory;
++            userDialog.value.bioHistoryLoaded = true;
++        } catch (err) {
++            console.error('Failed to load bio history', err);
++            if (userDialog.value.id === userId) {
++                userDialog.value.bioHistory = [];
++            }
++        } finally {
++            if (userDialog.value.id === userId) {
++                userDialog.value.bioHistoryLoading = false;
++            }
++        }
++    }
++
+     async function initUserNotes() {
+         state.lastNoteCheck = new Date();
+         state.lastDbNoteDate = null;
+@@ -982,6 +1016,7 @@ export const useUserStore = defineStore('User', () => {
+         clearCachedUsers,
+         rebuildCachedUserDisplayNameIndex,
+         sortUserDialogAvatars,
++        loadUserDialogBioHistory,
+         initUserNotes,
+         showSendBoopDialog,
+         showEditProfileDialog,
+diff --git a/src/styles/globals.css b/src/styles/globals.css
+index 80b3b2af..85331ba8 100644
+--- a/src/styles/globals.css
++++ b/src/styles/globals.css
+@@ -294,3 +294,23 @@ body {
+         background-color 0.1s ease,
+         color 0.1s ease;
+ }
++
++/* Text Difference Markers
++ * Produced by formatDifference() in shared/utils/base/diff.js.
++ * Use them wherever an old and a new version of a text are compared
++ * (feed entries, bio history, ...).
++ */
++.x-text-removed {
++    text-decoration: line-through;
++    color: #ff0000;
++    background-color: rgba(255, 0, 0, 0.2);
++    padding: 2px 2px;
++    border-radius: 4px;
++}
++
++.x-text-added {
++    color: rgb(35, 188, 35);
++    background-color: rgba(76, 255, 80, 0.2);
++    padding: 2px 2px;
++    border-radius: 4px;
++}
+diff --git a/src/views/Feed/Feed.vue b/src/views/Feed/Feed.vue
+index b95cfbe7..50312f6f 100644
+--- a/src/views/Feed/Feed.vue
++++ b/src/views/Feed/Feed.vue
+@@ -231,20 +231,3 @@
+         feedTableLookup();
+     }
+ </script>
+-
+-<style scoped>
+-    .feed :deep(.x-text-removed) {
+-        text-decoration: line-through;
+-        color: #ff0000;
+-        background-color: rgba(255, 0, 0, 0.2);
+-        padding: 2px 2px;
+-        border-radius: 4px;
+-    }
+-
+-    .feed :deep(.x-text-added) {
+-        color: rgb(35, 188, 35);
+-        background-color: rgba(76, 255, 80, 0.2);
+-        padding: 2px 2px;
+-        border-radius: 4px;
+-    }
+-</style>
+diff --git a/src/views/Feed/__tests__/columns.test.js b/src/views/Feed/__tests__/columns.test.js
+index 19734f79..8174b299 100644
+--- a/src/views/Feed/__tests__/columns.test.js
++++ b/src/views/Feed/__tests__/columns.test.js
+@@ -18,11 +18,16 @@ vi.mock('../../../coordinators/userCoordinator', () => ({
+     showUserDialog: vi.fn()
+ }));
+ 
+-vi.mock('../../../shared/utils', () => ({
+-    formatDateFilter: (value) => value,
+-    statusClass: (value) => value,
+-    timeToText: (value) => value
+-}));
++vi.mock('../../../shared/utils', async () => {
++    // formatDifference is shared with the bio history dialog and has no deps
++    const { formatDifference } = await import('../../../shared/utils/base/diff');
++    return {
++        formatDateFilter: (value) => value,
++        statusClass: (value) => value,
++        timeToText: (value) => value,
++        formatDifference
++    };
++});
+ 
+ vi.mock('../../../components/AvatarInfo.vue', () => ({
+     default: 'AvatarInfo'
+diff --git a/src/views/Feed/columns.jsx b/src/views/Feed/columns.jsx
+index 7a131401..a84bf948 100644
+--- a/src/views/Feed/columns.jsx
++++ b/src/views/Feed/columns.jsx
+@@ -4,7 +4,7 @@ import { Badge } from '../../components/ui/badge';
+ import { Button } from '../../components/ui/button';
+ import { Tooltip, TooltipContent, TooltipTrigger } from '../../components/ui/tooltip';
+ import { ArrowDown, ArrowRight, ArrowUpDown, ChevronDown, ChevronRight } from 'lucide-vue-next';
+-import { formatDateFilter, statusClass, timeToText } from '../../shared/utils';
++import { formatDateFilter, formatDifference, statusClass, timeToText } from '../../shared/utils';
+ import { i18n } from '../../plugins/i18n';
+ import { useGalleryStore, useFriendStore } from '../../stores';
+ import { showUserDialog } from '../../coordinators/userCoordinator';
+@@ -340,119 +340,3 @@ export const columns = [
+         }
+     }
+ ];
+-
+-/**
+- * Function that format the differences between two strings with HTML tags markerStartTag and markerEndTag are optional,
+- * if emitted, the differences will be highlighted with yellow and underlined.
+- *
+- * @param {any} s1
+- * @param {any} s2
+- * @param {any} markerStartTag
+- * @param {any} markerEndTag
+- * @returns An array that contains both the string 1 and string 2, which the differences are formatted with HTML tags
+- */
+-
+-//function getWordDifferences
+-function formatDifference(
+-    oldString,
+-    newString,
+-    markerAddition = '<span class="x-text-added">{{text}}</span>',
+-    markerDeletion = '<span class="x-text-removed">{{text}}</span>'
+-) {
+-    [oldString, newString] = [oldString, newString].map((s) =>
+-        String(s ?? '')
+-            .replaceAll(/&/g, '&amp;')
+-            .replaceAll(/</g, '&lt;')
+-            .replaceAll(/>/g, '&gt;')
+-            .replaceAll(/"/g, '&quot;')
+-            .replaceAll(/'/g, '&#039;')
+-            .replaceAll(/\n/g, '<br>')
+-    );
+-
+-    const oldWords = oldString.split(/\s+/).flatMap((word) => word.split(/(<br>)/));
+-    const newWords = newString.split(/\s+/).flatMap((word) => word.split(/(<br>)/));
+-
+-    function findLongestMatch(oldStart, oldEnd, newStart, newEnd) {
+-        let bestOldStart = oldStart;
+-        let bestNewStart = newStart;
+-        let bestSize = 0;
+-
+-        const lookup = new Map();
+-        for (let i = oldStart; i < oldEnd; i++) {
+-            const word = oldWords[i];
+-            if (!lookup.has(word)) lookup.set(word, []);
+-            lookup.get(word).push(i);
+-        }
+-
+-        for (let j = newStart; j < newEnd; j++) {
+-            const word = newWords[j];
+-            if (!lookup.has(word)) continue;
+-
+-            for (const i of lookup.get(word)) {
+-                let size = 0;
+-                while (i + size < oldEnd && j + size < newEnd && oldWords[i + size] === newWords[j + size]) {
+-                    size++;
+-                }
+-                if (size > bestSize) {
+-                    bestOldStart = i;
+-                    bestNewStart = j;
+-                    bestSize = size;
+-                }
+-            }
+-        }
+-
+-        return {
+-            oldStart: bestOldStart,
+-            newStart: bestNewStart,
+-            size: bestSize
+-        };
+-    }
+-
+-    function buildDiff(oldStart, oldEnd, newStart, newEnd) {
+-        const result = [];
+-        const match = findLongestMatch(oldStart, oldEnd, newStart, newEnd);
+-
+-        if (match.size > 0) {
+-            // Handle differences before the match
+-            if (oldStart < match.oldStart || newStart < match.newStart) {
+-                result.push(...buildDiff(oldStart, match.oldStart, newStart, match.newStart));
+-            }
+-
+-            // Add the matched words
+-            result.push(oldWords.slice(match.oldStart, match.oldStart + match.size).join(' '));
+-
+-            // Handle differences after the match
+-            if (match.oldStart + match.size < oldEnd || match.newStart + match.size < newEnd) {
+-                result.push(...buildDiff(match.oldStart + match.size, oldEnd, match.newStart + match.size, newEnd));
+-            }
+-        } else {
+-            function build(words, start, end, pattern) {
+-                let r = [];
+-                let ts = words
+-                    .slice(start, end)
+-                    .filter((w) => w.length > 0)
+-                    .join(' ')
+-                    .split('<br>');
+-                for (let i = 0; i < ts.length; i++) {
+-                    if (i > 0) r.push('<br>');
+-                    if (ts[i].length < 1) continue;
+-                    r.push(pattern.replace('{{text}}', ts[i]));
+-                }
+-                return r;
+-            }
+-
+-            // Add deletions
+-            if (oldStart < oldEnd) result.push(...build(oldWords, oldStart, oldEnd, markerDeletion));
+-
+-            // Add insertions
+-            if (newStart < newEnd) result.push(...build(newWords, newStart, newEnd, markerAddition));
+-        }
+-
+-        return result;
+-    }
+-
+-    return buildDiff(0, oldWords.length, 0, newWords.length)
+-        .join(' ')
+-        .replace(/<br>[ ]+<br>/g, '<br><br>')
+-        .replace(/<br> /g, '<br>');
+-}
+-- 
+2.55.0.windows.3
+
