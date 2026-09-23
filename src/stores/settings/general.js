@@ -23,6 +23,7 @@ export const useGeneralSettingsStore = defineStore('GeneralSettings', () => {
     const isStartAsMinimizedState = ref(false);
     const disableGpuAcceleration = ref(false);
     const isCloseToTray = ref(false);
+    const isEnergySaving = ref(true);
     const disableVrOverlayGpuAcceleration = ref(false);
     const localFavoriteFriendsGroups = ref([]);
     const udonExceptionLogging = ref(false);
@@ -51,6 +52,7 @@ export const useGeneralSettingsStore = defineStore('GeneralSettings', () => {
             isStartAsMinimizedStateConfig,
             isCloseToTrayConfig,
             isCloseToTrayConfigBoolConfig,
+            isEnergySavingConfig,
             disableGpuAccelerationStrConfig,
             disableVrOverlayGpuAccelerationStrConfig,
             localFavoriteFriendsGroupsStrConfig,
@@ -78,6 +80,7 @@ export const useGeneralSettingsStore = defineStore('GeneralSettings', () => {
             VRCXStorage.Get('VRCX_StartAsMinimizedState'),
             VRCXStorage.Get('VRCX_CloseToTray'),
             configRepository.getBool('VRCX_CloseToTray'),
+            VRCXStorage.Get('VRCX_EnergySaving'),
             VRCXStorage.Get('VRCX_DisableGpuAcceleration'),
             VRCXStorage.Get('VRCX_DisableVrOverlayGpuAcceleration'),
             configRepository.getString('VRCX_localFavoriteFriendsGroups', '[]'),
@@ -115,6 +118,8 @@ export const useGeneralSettingsStore = defineStore('GeneralSettings', () => {
         }
 
         disableGpuAcceleration.value = disableGpuAccelerationStrConfig === 'true';
+        // on by default: only an explicit "false" turns energy saving off
+        isEnergySaving.value = isEnergySavingConfig !== 'false';
         disableVrOverlayGpuAcceleration.value = disableVrOverlayGpuAccelerationStrConfig === 'true';
         localFavoriteFriendsGroups.value = JSON.parse(localFavoriteFriendsGroupsStrConfig);
         udonExceptionLogging.value = udonExceptionLoggingConfig;
@@ -152,6 +157,11 @@ export const useGeneralSettingsStore = defineStore('GeneralSettings', () => {
     function setIsCloseToTray() {
         isCloseToTray.value = !isCloseToTray.value;
         VRCXStorage.Set('VRCX_CloseToTray', isCloseToTray.value.toString());
+    }
+    function setIsEnergySaving() {
+        isEnergySaving.value = !isEnergySaving.value;
+        // VRCXStorage.Set re-evaluates the window state, so this takes effect immediately
+        VRCXStorage.Set('VRCX_EnergySaving', isEnergySaving.value.toString());
     }
     function setDisableGpuAcceleration() {
         disableGpuAcceleration.value = !disableGpuAcceleration.value;
@@ -339,6 +349,7 @@ export const useGeneralSettingsStore = defineStore('GeneralSettings', () => {
         isStartAtWindowsStartup,
         isStartAsMinimizedState,
         isCloseToTray,
+        isEnergySaving,
         disableGpuAcceleration,
         disableVrOverlayGpuAcceleration,
         localFavoriteFriendsGroups,
@@ -365,6 +376,7 @@ export const useGeneralSettingsStore = defineStore('GeneralSettings', () => {
         setIsStartAtWindowsStartup,
         setIsStartAsMinimizedState,
         setIsCloseToTray,
+        setIsEnergySaving,
         setDisableGpuAcceleration,
         setDisableVrOverlayGpuAcceleration,
         setLocalFavoriteFriendsGroups,

@@ -72,7 +72,9 @@ namespace VRCX
             SetProxy();
             InitializeHttpClient();
             LoadCookies();
-            _timer.Change(1000, 1000);
+            // SaveCookies() serialises the whole jar to disk, and login/logout/exit all save it
+            // explicitly, so this timer only needs to be a safety net against a hard kill.
+            _timer.Change(30000, 30000);
         }
 
         private void InitializeHttpClient()

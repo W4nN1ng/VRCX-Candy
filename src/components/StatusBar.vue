@@ -388,6 +388,7 @@
     } from '@/components/ui/context-menu';
     import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
     import { storeToRefs } from 'pinia';
+    import { watchState } from '../services/watchState';
     import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
     import {
         NumberField,
@@ -536,11 +537,21 @@
     let lastMsgCount = wsState.messageCount;
 
     const wsCanvasRef = ref(null);
+    // assigning canvas.width reallocates its backing store, and getComputedStyle forces a style
+    // recalc, so neither belongs in a once-a-second redraw
+    let sparklineColor = '';
+    let sparklineColorAge = 0;
     const now = useNow({ interval: 1000 });
 
     useIntervalFn(() => {
         const delta = wsState.messageCount - lastMsgCount;
         lastMsgCount = wsState.messageCount;
+
+        // nobody is looking at the graph while the window is hidden, and the browser is not
+        // painting anyway - keep the counter in step so the next visible tick is not a spike
+        if (watchState.isEnergySaving) {
+            return;
+        }
 
         const arr = msgHistory.value;
         arr.shift();
@@ -562,16 +573,25 @@
         if (!ctx) return;
 
         const dpr = window.devicePixelRatio || 1;
-        canvas.width = Math.floor(WS_CANVAS_WIDTH * dpr);
-        canvas.height = Math.floor(WS_CANVAS_HEIGHT * dpr);
-        canvas.style.width = `${WS_CANVAS_WIDTH}px`;
-        canvas.style.height = `${WS_CANVAS_HEIGHT}px`;
+        const wantedWidth = Math.floor(WS_CANVAS_WIDTH * dpr);
+        const wantedHeight = Math.floor(WS_CANVAS_HEIGHT * dpr);
+        if (canvas.width !== wantedWidth || canvas.height !== wantedHeight) {
+            canvas.width = wantedWidth;
+            canvas.height = wantedHeight;
+            canvas.style.width = `${WS_CANVAS_WIDTH}px`;
+            canvas.style.height = `${WS_CANVAS_HEIGHT}px`;
+            sparklineColorAge = 0;
+        }
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         const w = WS_CANVAS_WIDTH;
         const h = WS_CANVAS_HEIGHT;
         const data = msgHistory.value;
 
-        const fg = resolveCssColor('--foreground', '#cfd3dc');
+        if (!sparklineColor || sparklineColorAge++ > 30) {
+            sparklineColor = resolveCssColor('--foreground', '#cfd3dc');
+            sparklineColorAge = 0;
+        }
+        const fg = sparklineColor;
         ctx.clearRect(0, 0, w, h);
 
         const max = Math.max(...data, 1);

@@ -66,6 +66,11 @@ namespace VRCX
         {
             _storage[key] = value;
             ScheduleSave();
+            if (key == "VRCX_EnergySaving")
+            {
+                // the window may need to wake the renderer back up, or start sleeping, right now
+                MainForm.Instance?.SyncEnergySaving();
+            }
         }
 
         public string GetAll()

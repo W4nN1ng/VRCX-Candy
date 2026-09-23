@@ -19,6 +19,9 @@ namespace VRCX
         private readonly Icon _appIcon;
         private readonly Icon _appIconNoty;
         private readonly Timer _saveTimer;
+        private readonly Timer _energyTimer;
+        private bool _energySavingActive;
+        private bool _energySavingScheduled;
         private int LastLocationX;
         private int LastLocationY;
         private int LastSizeWidth;
@@ -35,6 +38,11 @@ namespace VRCX
             _saveTimer = new Timer();
             _saveTimer.Interval = 5000;
             _saveTimer.Tick += SaveTimer_Tick;
+            // one-shot delay before we stop painting, so flicking the window in and out of the
+            // tray does not toggle the browser visibility back and forth
+            _energyTimer = new Timer();
+            _energyTimer.Interval = 3000;
+            _energyTimer.Tick += EnergyTimer_Tick;
             try
             {
                 var path = Path.GetDirectoryName(Environment.ProcessPath) ?? string.Empty;
@@ -65,6 +73,10 @@ namespace VRCX
             {
                 if (Program.LaunchDebug)
                     Browser.ShowDevTools();
+                // the window may already be hidden (start as minimized / close to tray), so the
+                // renderer needs to be told its current state as soon as it can hear us
+                if (Browser.IsBrowserInitialized)
+                    SyncEnergySaving();
             };
             Browser.AddressChanged += (_, addressChangedEventArgs) =>
             {
@@ -158,6 +170,8 @@ namespace VRCX
             if (WindowState != FormWindowState.Minimized)
                 LastWindowStateToRestore = WindowState;
 
+            ScheduleEnergySaving();
+
             if (WindowState != FormWindowState.Normal)
                 return;
 
@@ -208,6 +222,117 @@ namespace VRCX
         private void MainForm_FormClosed(object sender, FormClosedEventArgs e)
         {
             SaveWindowState();
+        }
+
+        protected override void OnVisibleChanged(System.EventArgs e)
+        {
+            base.OnVisibleChanged(e);
+            ScheduleEnergySaving();
+        }
+
+        /// <summary>
+        /// Re-check whether the browser should stop painting, e.g. after the user flips the setting.
+        /// </summary>
+        public void SyncEnergySaving()
+        {
+            if (InvokeRequired)
+            {
+                try { BeginInvoke(new Action(SyncEnergySaving)); } catch (Exception ex) { logger.Error(ex); }
+                return;
+            }
+            ScheduleEnergySaving();
+        }
+
+        private void ScheduleEnergySaving()
+        {
+            try
+            {
+                var hidden = IsWindowHidden();
+                if (hidden == _energySavingActive)
+                {
+                    _energyTimer.Stop();
+                    _energySavingScheduled = false;
+                    return;
+                }
+
+                // coming back must be instant or the window opens showing a stale frame;
+                // going to sleep can wait a moment
+                if (!hidden)
+                {
+                    _energyTimer.Stop();
+                    _energySavingScheduled = false;
+                    ApplyEnergySaving(false);
+                    return;
+                }
+
+                if (_energySavingScheduled)
+                    return;
+
+                _energySavingScheduled = true;
+                _energyTimer.Start();
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex);
+            }
+        }
+
+        private void EnergyTimer_Tick(object sender, EventArgs e)
+        {
+            _energyTimer.Stop();
+            _energySavingScheduled = false;
+            try
+            {
+                if (IsWindowHidden())
+                    ApplyEnergySaving(true);
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex);
+            }
+        }
+
+        private bool IsWindowHidden()
+        {
+            if (VRCXStorage.Instance.Get("VRCX_EnergySaving") == "false")
+                return false;
+            return WindowState == FormWindowState.Minimized || !Visible;
+        }
+
+        private void ApplyEnergySaving(bool enabled)
+        {
+            if (_energySavingActive == enabled)
+                return;
+            if (Browser == null || !Browser.IsBrowserInitialized)
+                return;
+
+            _energySavingActive = enabled;
+            try
+            {
+                // stops Chromium compositing the page; the renderer and its timers keep running
+                Browser.GetBrowserHost()?.WasHidden(enabled);
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex);
+            }
+            NotifyFrontend(enabled);
+            logger.Info($"Energy saving: {(enabled ? "on" : "off")}");
+        }
+
+        private void NotifyFrontend(bool enabled)
+        {
+            if (Browser == null || !Browser.CanExecuteJavascriptInMainFrame)
+                return;
+            try
+            {
+                Browser.ExecuteScriptAsync(
+                    $"window?.$pinia?.ui?.setEnergySaving?.({(enabled ? "true" : "false")});");
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex);
+            }
         }
 
         private void TrayIcon_MouseClick(object sender, MouseEventArgs e)

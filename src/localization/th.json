@@ -773,6 +773,8 @@
                     "startup": "เริ่มทำงานเมื่อเปิด Windows",
                     "minimized": "เริ่มแบบย่อหน้าต่าง",
                     "tray": "ย่อลงถาดระบบเมื่อปิด",
+                    "energy_saving": "Energy saving when hidden",
+                    "energy_saving_tooltip": "Stops drawing the window while it is minimized or sitting in the tray, which cuts GPU and CPU use. Events keep being recorded.",
                     "disable_gpu_acceleration": "ปิดการเร่งความเร็ว GPU",
                     "disable_gpu_acceleration_tooltip": "เปลี่ยนตัวเลือกนี้เมื่อคุณรู้ว่ากำลังทำอะไรเท่านั้น อาจช่วยแก้ปัญหาเกี่ยวกับ UI ได้ และต้องรีสตาร์ท VRCX",
                     "disable_vr_overlay_gpu_acceleration": "ปิดการเร่งความเร็ว GPU ของโอเวอร์เลย์ VR",

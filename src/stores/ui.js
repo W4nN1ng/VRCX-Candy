@@ -5,6 +5,7 @@ import { useMagicKeys } from '@vueuse/core';
 import { useRouter } from 'vue-router';
 
 import { AppDebug } from '../services/appConfig';
+import { watchState } from '../services/watchState';
 import { refreshCustomCss } from '../shared/utils/base/ui';
 import { updateLocalizedStrings } from '../plugins/i18n';
 import { useAppearanceSettingsStore } from './settings/appearance';
@@ -44,6 +45,22 @@ export const useUiStore = defineStore('Ui', () => {
     const shiftHeld = ref(false);
     const trayIconNotify = ref(false);
     const dialogCrumbs = ref([]);
+    const energySaving = ref(false);
+
+    /**
+     * Called by the C# host when the window stops being visible. The host has already told
+     * Chromium to stop painting; this only lets display-only loops skip their work.
+     *
+     * @param {boolean} value
+     */
+    function setEnergySaving(value) {
+        const next = Boolean(value);
+        if (energySaving.value === next) {
+            return;
+        }
+        energySaving.value = next;
+        watchState.isEnergySaving = next;
+    }
 
     watch(ctrlR, (isPressed) => {
         if (isPressed) {
@@ -338,7 +355,9 @@ export const useUiStore = defineStore('Ui', () => {
         notifiedMenus,
         shiftHeld,
         dialogCrumbs,
+        energySaving,
 
+        setEnergySaving,
         notifyMenu,
         removeNotify,
         clearAllNotifications,

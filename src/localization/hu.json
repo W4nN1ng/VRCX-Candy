@@ -1004,6 +1004,8 @@
                     "startup": "Indítás a Windows indításakor",
                     "minimized": "Indítás tálcára kicsinyítve",
                     "tray": "Bezárás a tálcára",
+                    "energy_saving": "Energy saving when hidden",
+                    "energy_saving_tooltip": "Stops drawing the window while it is minimized or sitting in the tray, which cuts GPU and CPU use. Events keep being recorded.",
                     "disable_gpu_acceleration": "GPU gyorsítás letiltása",
                     "disable_gpu_acceleration_tooltip": "Csak akkor változtasd meg ezt a beállítást, ha tudod mit csinálsz. Megoldhat UI-problémákat, de a VRCX újraindítása szükséges.",
                     "disable_vr_overlay_gpu_acceleration": "VR átfedés GPU gyorsítás letiltása",

@@ -197,6 +197,8 @@
                     "startup": "Khởi động cùng với Windows",
                     "minimized": "Khởi động ở trạng thái thu nhỏ",
                     "tray": "Đóng nhỏ vào khay hệ thống",
+                    "energy_saving": "Energy saving when hidden",
+                    "energy_saving_tooltip": "Stops drawing the window while it is minimized or sitting in the tray, which cuts GPU and CPU use. Events keep being recorded.",
                     "proxy": "Proxy settings"
                 },
                 "favorites": {

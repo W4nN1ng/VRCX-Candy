@@ -177,7 +177,9 @@ export function applyWorld(json) {
     let ref = worldStore.cachedWorlds.get(json.id);
     if (typeof ref === 'undefined') {
         ref = createDefaultWorldRef(json);
-        evictMapCache(worldStore.cachedWorlds, 10000, () => false, {
+        // 10000 was effectively no cap at all; keep the world that is open in the dialog so
+        // browsing a long list cannot evict the record being shown
+        evictMapCache(worldStore.cachedWorlds, 2000, (world) => world.id === worldStore.worldDialog?.id, {
             logLabel: 'World cache cleanup'
         });
         worldStore.cachedWorlds.set(ref.id, ref);

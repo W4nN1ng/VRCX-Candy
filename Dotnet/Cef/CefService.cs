@@ -77,6 +77,17 @@ namespace VRCX
                 cefSettings.CefCommandLineArgs.Add("disable-gpu");
             }
 
+            if (!isOverlay)
+            {
+                // Energy saving tells Chromium the widget is hidden so it stops painting the UI
+                // while the window is minimized or sitting in the tray. All event recording lives
+                // in this renderer, so its timers have to keep firing at the normal rate while
+                // hidden - otherwise background throttling would silently thin out the data.
+                cefSettings.CefCommandLineArgs.Add("disable-background-timer-throttling");
+                cefSettings.CefCommandLineArgs.Add("disable-backgrounding-occluded-windows");
+                cefSettings.CefCommandLineArgs.Add("disable-renderer-backgrounding");
+            }
+
             if (Program.LaunchDebug)
             {
                 // chrome://inspect/#devices

@@ -997,6 +997,8 @@
                     "startup": "在 Windows 启动时自动启动",
                     "minimized": "以最小化的形式启动",
                     "tray": "最小化到系统托盘",
+                    "energy_saving": "窗口隐藏时节能",
+                    "energy_saving_tooltip": "最小化或缩到托盘时停止绘制界面，降低显卡和 CPU 占用；事件记录不受影响",
                     "disable_gpu_acceleration": "禁用 GPU 加速",
                     "disable_gpu_acceleration_tooltip": "仅在你“知道自己在做什么”时才应更改此选项，这可能会导致 SteamVR 叠加界面出现问题。但如果你遇到 UI 显示问题，那么可以尝试关闭此选项，重启 VRCX 生效",
                     "disable_vr_overlay_gpu_acceleration": "禁用 VR 叠加界面的GPU加速",

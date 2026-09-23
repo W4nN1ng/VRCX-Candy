@@ -598,6 +598,8 @@
                     "startup": "Uruchamiaj razem z Windows",
                     "minimized": "Uruchamiaj zminimalizowane",
                     "tray": "Zamykaj do zasobnika",
+                    "energy_saving": "Energy saving when hidden",
+                    "energy_saving_tooltip": "Stops drawing the window while it is minimized or sitting in the tray, which cuts GPU and CPU use. Events keep being recorded.",
                     "disable_gpu_acceleration": "Wyłącz akcelerację GPU",
                     "disable_gpu_acceleration_tooltip": "Zmieniaj to ustawienie tylko, jeżeli wiesz co robisz. Może pomóc z błędami UI. Wymaga restartu VRCX",
                     "disable_vr_overlay_gpu_acceleration": "Wyłącz akcelerację GPU nakładki VR",

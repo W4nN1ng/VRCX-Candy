@@ -111,6 +111,15 @@
             </SettingsItem>
 
             <SettingsItem
+                :label="t('view.settings.general.application.energy_saving')"
+                :description="t('view.settings.general.application.energy_saving_tooltip')">
+                <Switch
+                    :model-value="isEnergySaving"
+                    :ariaLabel="t('view.settings.general.application.energy_saving')"
+                    @update:modelValue="setIsEnergySaving" />
+            </SettingsItem>
+
+            <SettingsItem
                 v-if="!isLinux"
                 :label="t('view.settings.general.application.disable_gpu_acceleration')"
                 :description="t('view.settings.general.application.disable_gpu_acceleration_tooltip')">
@@ -195,6 +204,7 @@
         isStartAtWindowsStartup,
         isStartAsMinimizedState,
         isCloseToTray,
+        isEnergySaving,
         disableGpuAcceleration,
         disableVrOverlayGpuAcceleration
     } = storeToRefs(generalSettingsStore);
@@ -203,6 +213,7 @@
         setIsStartAtWindowsStartup,
         setIsStartAsMinimizedState,
         setIsCloseToTray,
+        setIsEnergySaving,
         setDisableGpuAcceleration,
         setDisableVrOverlayGpuAcceleration,
         promptProxySettings
