@@ -19,7 +19,9 @@ namespace VRCX
         private readonly Icon _appIcon;
         private readonly Icon _appIconNoty;
         private readonly Timer _saveTimer;
-        private readonly Timer _energyTimer;
+        // initialised as a field, not in the constructor body: InitializeComponent raises Resize
+        // while it restores the saved window state, which is before the body has run
+        private readonly Timer _energyTimer = new() { Interval = 3000 };
         private bool _energySavingActive;
         private bool _energySavingScheduled;
         private int LastLocationX;
@@ -40,8 +42,6 @@ namespace VRCX
             _saveTimer.Tick += SaveTimer_Tick;
             // one-shot delay before we stop painting, so flicking the window in and out of the
             // tray does not toggle the browser visibility back and forth
-            _energyTimer = new Timer();
-            _energyTimer.Interval = 3000;
             _energyTimer.Tick += EnergyTimer_Tick;
             try
             {
