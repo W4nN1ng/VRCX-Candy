@@ -1,7 +1,10 @@
 <template>
     <!-- z-index -1 keeps the picture above the body background but below every
          surface the interface draws, so nothing else has to be reordered. -->
-    <div v-if="imageUrl" class="pointer-events-none fixed overflow-hidden" :style="{ ...imageStyle, zIndex: -1 }">
+    <div
+        v-if="wallpaperImageUrl"
+        class="pointer-events-none fixed overflow-hidden"
+        :style="{ ...imageStyle, zIndex: -1 }">
         <div v-if="isContain" class="absolute inset-0" :style="fillStyle"></div>
     </div>
 </template>

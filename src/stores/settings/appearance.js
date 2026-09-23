@@ -543,10 +543,16 @@ export const useAppearanceSettingsStore = defineStore(
          * @param {string} key
          * @param {unknown} value
          */
-        function setWallpaperValue(key, value) {
-            wallpaper.value = normalizeWallpaperSettings({ ...wallpaper.value, [key]: value });
-            configRepository.setObject('VRCX_wallpaper', wallpaper.value);
+        function setWallpaperValues(patch, persist = true) {
+            wallpaper.value = normalizeWallpaperSettings({ ...wallpaper.value, ...patch });
+            if (persist) {
+                configRepository.setObject('VRCX_wallpaper', wallpaper.value);
+            }
             applyWallpaper(wallpaper.value);
+        }
+
+        function setWallpaperValue(key, value) {
+            setWallpaperValues({ [key]: value });
         }
 
         /**
@@ -989,6 +995,7 @@ export const useAppearanceSettingsStore = defineStore(
             setDisplayVRCProfileBackgrounds,
             setProfileBackgroundOpacity,
             setWallpaperValue,
+            setWallpaperValues,
             setWallpaperImageUrl,
             setDisplayVRCProfileCosmetics,
             setHideNicknames,

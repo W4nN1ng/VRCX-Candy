@@ -332,7 +332,34 @@ html.has-wallpaper .bg-background {
     background-color: color-mix(in oklab, var(--background) var(--wallpaper-content-opacity, 85%), transparent);
 }
 
-html.has-wallpaper.dark .x-container,
+/* In dark mode the page container is painted in the sidebar colour, so it keeps that
+   colour here. It is still a content surface though, so it follows the content
+   opacity - grouping it with .bg-sidebar below made the whole page go opaque
+   whenever the sidebar slider was near the top, regardless of the content slider. */
+html.has-wallpaper.dark .x-container {
+    background-color: color-mix(in oklab, var(--sidebar) var(--wallpaper-content-opacity, 85%), transparent);
+}
+
 html.has-wallpaper .bg-sidebar {
     background-color: color-mix(in oklab, var(--sidebar) var(--wallpaper-sidebar-opacity, 90%), transparent);
+}
+
+/* <html> carries a background of its own (html.dark { background-color: #1e1e1ef2 }),
+   and that is what makes this necessary. When the root element has a background, the
+   body's background is NOT promoted to the canvas - it is painted as an ordinary
+   block background instead, and ordinary block backgrounds paint AFTER negative
+   z-index content. So an opaque body sat directly on top of the picture. Dropping the
+   body background leaves the html one as the backdrop, and that one does paint
+   underneath. The two are nearly the same colour, so nothing else changes. */
+html.has-wallpaper body {
+    background: transparent;
+}
+
+/* Cards sit inside the page container and are painted in the same colour as it -
+   every theme sets --card to the same value as --background. Leaving them opaque
+   therefore just paints a second solid layer over the translucent one and hides the
+   wallpaper again, and leaving them translucent dims it twice. Dropping the fill
+   keeps the border, so a card still reads as a card. */
+html.has-wallpaper .bg-card {
+    background-color: transparent;
 }

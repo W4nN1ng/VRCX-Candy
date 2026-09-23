@@ -198,15 +198,23 @@
 
             <template v-if="wallpaper.path">
                 <!-- Live preview of the actual picture with the current settings, so a
-                     slider move can be judged without hunting for a window to resize. -->
+                     slider move can be judged without hunting for a window to resize.
+                     Dragging inside it moves the focus point, which is easier to aim
+                     than two sliders and does not need explaining. -->
                 <SettingsItem
                     :label="t('view.settings.appearance.wallpaper.preview')"
                     :description="t('view.settings.appearance.wallpaper.preview_description')">
-                    <div class="relative h-24 w-56 overflow-hidden rounded-md border bg-muted">
+                    <div
+                        ref="wallpaperPreviewRef"
+                        class="relative h-24 w-56 cursor-crosshair touch-none overflow-hidden rounded-md border bg-muted select-none"
+                        @pointerdown="startFocusDrag">
                         <div
                             v-if="wallpaperImageUrl"
                             class="absolute inset-0 overflow-hidden"
                             :style="{ ...wallpaperPreviewStyle, zIndex: 0 }"></div>
+                        <div
+                            class="pointer-events-none absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white bg-black/50 shadow"
+                            :style="{ left: `${wallpaper.positionX}%`, top: `${wallpaper.positionY}%` }"></div>
                     </div>
                 </SettingsItem>
 
@@ -240,13 +248,6 @@
                 <SettingsItem :label="t('view.settings.appearance.wallpaper.zoom')">
                     <div class="w-56 max-w-full pt-1">
                         <Slider v-model="wallpaperZoom" :min="100" :max="300" :step="1" />
-                    </div>
-                </SettingsItem>
-
-                <SettingsItem :label="t('view.settings.appearance.wallpaper.focus')">
-                    <div class="flex w-56 max-w-full flex-col gap-1 pt-1">
-                        <Slider v-model="wallpaperPositionX" :min="0" :max="100" :step="1" />
-                        <Slider v-model="wallpaperPositionY" :min="0" :max="100" :step="1" />
                     </div>
                 </SettingsItem>
 
@@ -642,10 +643,58 @@
     const wallpaperBrightness = wallpaperSlider('brightness', 100);
     const wallpaperBlur = wallpaperSlider('blur', 1);
     const wallpaperZoom = wallpaperSlider('zoom', 100);
-    const wallpaperPositionX = wallpaperSlider('positionX', 1);
-    const wallpaperPositionY = wallpaperSlider('positionY', 1);
     const wallpaperContentOpacity = wallpaperSlider('contentOpacity', 100);
     const wallpaperSidebarOpacity = wallpaperSlider('sidebarOpacity', 100);
+
+    const wallpaperPreviewRef = ref(null);
+
+    /**
+     * Move the focus point to wherever the pointer is inside the preview.
+     *
+     * @param {PointerEvent} event
+     * @returns {{ positionX: number; positionY: number } | null}
+     */
+    function focusFromPointer(event) {
+        const element = wallpaperPreviewRef.value;
+        if (!element) {
+            return null;
+        }
+        const rect = element.getBoundingClientRect();
+        if (!rect.width || !rect.height) {
+            return null;
+        }
+        return {
+            positionX: Math.round(Math.min(100, Math.max(0, ((event.clientX - rect.left) / rect.width) * 100))),
+            positionY: Math.round(Math.min(100, Math.max(0, ((event.clientY - rect.top) / rect.height) * 100)))
+        };
+    }
+
+    function startFocusDrag(event) {
+        event.preventDefault();
+        const first = focusFromPointer(event);
+        if (!first) {
+            return;
+        }
+        // Follow the pointer without writing to the config table on every move; the
+        // store keeps the value in memory so the preview and the window both track it,
+        // and the position is only saved when the drag finishes.
+        setWallpaperValues(first, false);
+
+        const onMove = (moveEvent) => {
+            const next = focusFromPointer(moveEvent);
+            if (next) {
+                setWallpaperValues(next, false);
+            }
+        };
+        const onUp = (upEvent) => {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            const last = focusFromPointer(upEvent) || first;
+            setWallpaperValues(last);
+        };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+    }
 
     async function pickWallpaper() {
         try {
@@ -677,6 +726,7 @@
         setDisplayVRCProfileBackgrounds,
         setProfileBackgroundOpacity,
         setWallpaperValue,
+        setWallpaperValues,
         setDisplayVRCProfileCosmetics,
         setHideNicknames,
         setShowInstanceIdInLocation,
