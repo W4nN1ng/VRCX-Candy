@@ -11,6 +11,7 @@ const testDefinitions = [
     { key: 'charts-mutual', routeName: 'charts-mutual' },
     { key: 'charts-hot-worlds', routeName: 'charts-hot-worlds' },
     { key: 'charts-friend-footprints', routeName: 'charts-friend-footprints' },
+    { key: 'charts-friend-status-lights', routeName: 'charts-friend-status-lights' },
     { key: 'notification', routeName: 'notification' },
     { key: 'direct-access', action: 'direct-access' }
 ];
@@ -253,7 +254,8 @@ describe('sanitizeLayout', () => {
             'charts-instance',
             'charts-mutual',
             'charts-hot-worlds',
-            'charts-friend-footprints'
+            'charts-friend-footprints',
+            'charts-friend-status-lights'
         ]);
     });
 

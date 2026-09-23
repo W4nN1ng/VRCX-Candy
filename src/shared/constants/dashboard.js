@@ -9,5 +9,6 @@ export const DASHBOARD_BLOCKED_PANEL_KEYS = new Set([
     'charts-mutual',
     'charts-hot-worlds',
     'charts-friend-footprints',
+    'charts-friend-status-lights',
     'tools'
 ]);

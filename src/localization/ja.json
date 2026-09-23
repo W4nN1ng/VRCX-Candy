@@ -701,6 +701,76 @@
                     "ongoing": "滞在中",
                     "unknown": "オフラインで離脱"
                 }
+            },
+            "friend_status_lights": {
+                "tab_label": "フレンドのステータス",
+                "header": "フレンドのステータス",
+                "search_placeholder": "フレンドを検索",
+                "no_candidates": "まだステータス記録のあるフレンドがいません",
+                "candidate_changes": "{count} 回の変化",
+                "empty": "選択した期間にこのフレンドのステータス記録がありません",
+                "toggle": {
+                    "inferred": "記録のない時間を推定する"
+                },
+                "tips": {
+                    "coverage": "VRCX は起動中に見たステータスしか表示できず、しかもフレンドのみ記録します。完全な履歴ではありません",
+                    "shares": "割合は「実際にステータスが記録された」時間だけで計算しています。記録のない時間は下に別枠で表示し、割合には含めません",
+                    "inferred": "ステータスが変わる前の記録のない時間を、ひとつ前のステータスで埋めます。このデータベースで検証したところ、次に記録されたステータスと約 90% 一致しました。推定値として扱ってください",
+                    "buckets": "オンライン・不明：オンラインでしたがステータスの変化が記録されていません。オフライン：VRCX がログアウトを確認しました。記録なし：VRCX が起動していなかったため、その期間は不明です"
+                },
+                "period": {
+                    "days_7": "7 日",
+                    "days_30": "30 日",
+                    "days_90": "90 日",
+                    "all": "すべて"
+                },
+                "light": {
+                    "online": "オンライン",
+                    "joinme": "だれでもおいで",
+                    "askme": "きいてみてね",
+                    "busy": "取り込み中"
+                },
+                "stats": {
+                    "recorded": "記録された時間",
+                    "since": "{date} から",
+                    "days": "記録のある日数",
+                    "last_change": "最終変化 {time}",
+                    "most_used": "最も多い",
+                    "most_used_hint": "記録時間の {percent}%",
+                    "switches": "切り替え回数",
+                    "longest_hint": "最長 {light} {duration}"
+                },
+                "section": {
+                    "shares": "4 つのステータスの割合",
+                    "timeline": "いつ何のステータスだったか",
+                    "hours": "時間帯ごとのステータス",
+                    "descriptions": "カスタムテキストの変更"
+                },
+                "bucket": {
+                    "unknown_online": "オンライン・不明",
+                    "offline": "オフライン",
+                    "unrecorded": "記録なし"
+                },
+                "row": {
+                    "average": "平均 {duration}"
+                },
+                "state": {
+                    "offline": "オフライン",
+                    "unknown": "不明",
+                    "inferred": "推定"
+                },
+                "timeline": {
+                    "recorded": "記録 {duration}",
+                    "no_change": "この日はステータスが記録されていません"
+                },
+                "hours": {
+                    "peak": "最多 {hour} 時 · {duration}",
+                    "hour": "{hour} 時"
+                },
+                "descriptions": {
+                    "hint": "VRCX はステータスのカスタムテキストの変更も記録します。これはテキストだけが変わりステータスは変わらないため、上のタイムラインには出てきません",
+                    "empty": "選択した期間にカスタムテキストの変更はありません"
+                }
             }
         },
         "tools": {

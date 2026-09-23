@@ -697,6 +697,76 @@
                     "ongoing": "還在這裡",
                     "unknown": "離線時離開"
                 }
+            },
+            "friend_status_lights": {
+                "tab_label": "好友狀態燈",
+                "header": "好友狀態燈",
+                "search_placeholder": "搜尋好友",
+                "no_candidates": "還沒有好友的狀態燈紀錄",
+                "candidate_changes": "{count} 次變化",
+                "empty": "所選時間範圍內沒有記錄到這位好友的狀態燈",
+                "toggle": {
+                    "inferred": "推算沒記錄到的時間"
+                },
+                "tips": {
+                    "coverage": "VRCX 只能顯示它執行期間看到的狀態燈，而且只記錄好友，所以這不是完整歷史",
+                    "shares": "百分比只按「確實記錄到狀態燈」的那部分時間計算。沒記錄到的時間單獨列在下面，不摻進百分比，所以數字不會被猜測稀釋",
+                    "inferred": "把每次換燈之前那段沒記錄到的時間，也按上一種燈算進去。用你資料庫的資料實測，這個推測和下一次真正記錄到的燈大約 90% 一致，所以結果是估計值",
+                    "buckets": "上線但未知：人在線上，可是一直沒換過燈，所以不知道當時掛的是什麼。離線：VRCX 看到他下線了。無紀錄：VRCX 當時沒在執行，這段時間什麼都不知道"
+                },
+                "period": {
+                    "days_7": "7 天",
+                    "days_30": "30 天",
+                    "days_90": "90 天",
+                    "all": "全部"
+                },
+                "light": {
+                    "online": "上線",
+                    "joinme": "加入我",
+                    "askme": "問問看",
+                    "busy": "請勿打擾"
+                },
+                "stats": {
+                    "recorded": "記錄到燈的時間",
+                    "since": "始於 {date}",
+                    "days": "有紀錄的天數",
+                    "last_change": "最近變化 {time}",
+                    "most_used": "最常掛的燈",
+                    "most_used_hint": "占記錄時長的 {percent}%",
+                    "switches": "換燈次數",
+                    "longest_hint": "最長一次 {light} 掛了 {duration}"
+                },
+                "section": {
+                    "shares": "四種燈各占多少",
+                    "timeline": "什麼時候是什麼燈",
+                    "hours": "幾點掛什麼燈",
+                    "descriptions": "文案改動"
+                },
+                "bucket": {
+                    "unknown_online": "上線但未知",
+                    "offline": "離線",
+                    "unrecorded": "無紀錄"
+                },
+                "row": {
+                    "average": "平均 {duration}"
+                },
+                "state": {
+                    "offline": "離線",
+                    "unknown": "未知",
+                    "inferred": "推測"
+                },
+                "timeline": {
+                    "recorded": "記錄到燈 {duration}",
+                    "no_change": "這天沒有記錄到狀態燈"
+                },
+                "hours": {
+                    "peak": "最活躍 {hour} 點 · {duration}",
+                    "hour": "{hour} 點"
+                },
+                "descriptions": {
+                    "hint": "VRCX 也會記錄對燈上自訂文案的修改。這類改動只換文字不換燈，所以不會出現在上面的時間軸裡",
+                    "empty": "所選時間範圍內沒有文案改動"
+                }
             }
         },
         "tools": {

@@ -145,6 +145,104 @@ const feed = {
         return players;
     },
 
+    /**
+     * Loads every recorded status light change of one player, oldest first.
+     *
+     * Rows where the light did not change but its custom text did are kept: they are
+     * real edits, and the status light dashboard reports them separately instead of
+     * dropping them. Aggregation lives in shared/utils/friendStatusLights.js, so this
+     * stays a plain ordered read.
+     *
+     * @param {string} userId - VRChat user id.
+     * @param {string} [createdAfter] - ISO timestamp to start from, empty for everything.
+     * @param {number} maxEntries - Maximum number of rows to return.
+     * @returns {Promise<object[]>} Raw feed_status rows.
+     */
+    async getStatusRowsForUserId(userId, createdAfter = '', maxEntries = 20000) {
+        const rows = [];
+        let dateFilter = '';
+        const args = { '@user_id': userId, '@limit': maxEntries };
+        if (createdAfter) {
+            dateFilter = 'AND created_at >= @created_after ';
+            args['@created_after'] = createdAfter;
+        }
+        await sqliteService.execute(
+            (dbRow) => {
+                rows.push({
+                    created_at: dbRow[0],
+                    status: dbRow[1] ?? '',
+                    status_description: dbRow[2] ?? '',
+                    previous_status: dbRow[3] ?? '',
+                    previous_status_description: dbRow[4] ?? ''
+                });
+            },
+            `SELECT created_at, status, status_description, previous_status, previous_status_description FROM ${dbVars.userPrefix}_feed_status WHERE user_id = @user_id ${dateFilter}ORDER BY created_at ASC, id ASC LIMIT @limit`,
+            args
+        );
+        return rows;
+    },
+
+    /**
+     * Loads every recorded online/offline transition of one player, oldest first.
+     *
+     * The table repeats itself, so callers should expect adjacent rows of the same
+     * type rather than assume a strict alternation.
+     *
+     * @param {string} userId - VRChat user id.
+     * @param {string} [createdAfter] - ISO timestamp to start from, empty for everything.
+     * @param {number} maxEntries - Maximum number of rows to return.
+     * @returns {Promise<object[]>} Raw feed_online_offline rows.
+     */
+    async getPresenceRowsForUserId(userId, createdAfter = '', maxEntries = 20000) {
+        const rows = [];
+        let dateFilter = '';
+        const args = { '@user_id': userId, '@limit': maxEntries };
+        if (createdAfter) {
+            dateFilter = 'AND created_at >= @created_after ';
+            args['@created_after'] = createdAfter;
+        }
+        await sqliteService.execute(
+            (dbRow) => {
+                rows.push({
+                    created_at: dbRow[0],
+                    type: dbRow[1] ?? ''
+                });
+            },
+            `SELECT created_at, type FROM ${dbVars.userPrefix}_feed_online_offline WHERE user_id = @user_id ${dateFilter}ORDER BY created_at ASC, id ASC LIMIT @limit`,
+            args
+        );
+        return rows;
+    },
+
+    /**
+     * Lists players that have recorded status light history, most recently seen first.
+     *
+     * @param {string} [createdAfter] - ISO timestamp to start from, empty for everything.
+     * @returns {Promise<object[]>} One entry per player with a change count.
+     */
+    async getPlayersWithStatusHistory(createdAfter = '') {
+        const players = [];
+        let dateFilter = '';
+        const args = {};
+        if (createdAfter) {
+            dateFilter = 'WHERE created_at >= @created_after ';
+            args['@created_after'] = createdAfter;
+        }
+        await sqliteService.execute(
+            (dbRow) => {
+                players.push({
+                    userId: dbRow[0],
+                    displayName: dbRow[1] ?? '',
+                    changes: Number(dbRow[2]) || 0,
+                    lastAt: dbRow[3] ?? ''
+                });
+            },
+            `SELECT user_id, MAX(display_name), COUNT(*), MAX(created_at) FROM ${dbVars.userPrefix}_feed_status ${dateFilter}GROUP BY user_id ORDER BY MAX(created_at) DESC`,
+            args
+        );
+        return players;
+    },
+
     addAvatarToDatabase(entry) {
         sqliteService.executeNonQuery(
             `INSERT OR IGNORE INTO ${dbVars.userPrefix}_feed_avatar (created_at, user_id, display_name, owner_id, avatar_name, current_avatar_image_url, current_avatar_thumbnail_image_url, previous_current_avatar_image_url, previous_current_avatar_thumbnail_image_url) VALUES (@created_at, @user_id, @display_name, @owner_id, @avatar_name, @current_avatar_image_url, @current_avatar_thumbnail_image_url, @previous_current_avatar_image_url, @previous_current_avatar_thumbnail_image_url)`,

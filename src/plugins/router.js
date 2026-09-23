@@ -117,6 +117,11 @@ const routes = [
                 name: 'charts-friend-footprints',
                 component: () => import('./../views/Charts/components/FriendFootprints.vue')
             },
+            {
+                path: 'charts/friend-status-lights',
+                name: 'charts-friend-status-lights',
+                component: () => import('./../views/Charts/components/FriendStatusLights.vue')
+            },
             { path: 'tools', name: 'tools', component: Tools },
             {
                 path: 'tools/gallery',

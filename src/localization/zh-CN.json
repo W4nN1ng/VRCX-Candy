@@ -709,6 +709,76 @@
                     "ongoing": "还在这里",
                     "unknown": "离线时离开"
                 }
+            },
+            "friend_status_lights": {
+                "tab_label": "好友状态灯",
+                "header": "好友状态灯",
+                "search_placeholder": "搜索好友",
+                "no_candidates": "还没有好友的状态灯记录",
+                "candidate_changes": "{count} 次变化",
+                "empty": "所选时间范围内没有记录到这位好友的状态灯",
+                "toggle": {
+                    "inferred": "推算没记录到的时间"
+                },
+                "tips": {
+                    "coverage": "VRCX 只能显示它运行期间看到的状态灯，而且只记录好友，所以这不是完整历史",
+                    "shares": "百分比只按「确实记录到状态灯」的那部分时间计算。没记录到的时间单独列在下面，不掺进百分比，所以数字不会被猜测稀释",
+                    "inferred": "把每次换灯之前那段没记录到的时间，也按上一种灯算进去。用你库里的数据实测，这个推算和下一次真正记录到的灯大约 90% 一致，所以结果是估计值",
+                    "buckets": "在线但未知：人在线，可是一直没换过灯，所以不知道当时挂的什么。离线：VRCX 看到他下线了。无记录：VRCX 当时没在运行，这段时间什么都不知道"
+                },
+                "period": {
+                    "days_7": "7 天",
+                    "days_30": "30 天",
+                    "days_90": "90 天",
+                    "all": "全部"
+                },
+                "light": {
+                    "online": "在线",
+                    "joinme": "欢迎加入",
+                    "askme": "问问看",
+                    "busy": "请勿打扰"
+                },
+                "stats": {
+                    "recorded": "记录到灯的时间",
+                    "since": "始于 {date}",
+                    "days": "有记录的天数",
+                    "last_change": "最近变化 {time}",
+                    "most_used": "最常挂的灯",
+                    "most_used_hint": "占记录时长的 {percent}%",
+                    "switches": "换灯次数",
+                    "longest_hint": "最长一次 {light} 挂了 {duration}"
+                },
+                "section": {
+                    "shares": "四种灯各占多少",
+                    "timeline": "什么时候是什么灯",
+                    "hours": "几点挂什么灯",
+                    "descriptions": "文案改动"
+                },
+                "bucket": {
+                    "unknown_online": "在线但未知",
+                    "offline": "离线",
+                    "unrecorded": "无记录"
+                },
+                "row": {
+                    "average": "平均 {duration}"
+                },
+                "state": {
+                    "offline": "离线",
+                    "unknown": "未知",
+                    "inferred": "推算"
+                },
+                "timeline": {
+                    "recorded": "记录到灯 {duration}",
+                    "no_change": "这天没有记录到状态灯"
+                },
+                "hours": {
+                    "peak": "最活跃 {hour} 点 · {duration}",
+                    "hour": "{hour} 点"
+                },
+                "descriptions": {
+                    "hint": "VRCX 也会记录对灯上自定义文案的修改。这类改动只换文字不换灯，所以不会出现在上面的时间线里",
+                    "empty": "所选时间范围内没有文案改动"
+                }
             }
         },
         "tools": {

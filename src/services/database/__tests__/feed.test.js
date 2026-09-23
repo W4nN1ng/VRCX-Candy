@@ -159,6 +159,130 @@ describe('feed.getPlayersWithGpsHistory', () => {
     });
 });
 
+describe('feed.getStatusRowsForUserId', () => {
+    beforeEach(() => {
+        mocks.execute.mockReset();
+    });
+
+    test('maps rows and keeps the ascending order', async () => {
+        mocks.execute.mockImplementation(async (callback) => {
+            callback(['2026-09-20T00:00:00.000Z', 'busy', '加班中', 'active', '在线']);
+            return undefined;
+        });
+
+        const result = await feed.getStatusRowsForUserId('usr_1');
+
+        expect(result).toEqual([
+            {
+                created_at: '2026-09-20T00:00:00.000Z',
+                status: 'busy',
+                status_description: '加班中',
+                previous_status: 'active',
+                previous_status_description: '在线'
+            }
+        ]);
+        const sql = mocks.execute.mock.calls[0][1];
+        expect(sql).toContain('usr123_feed_status');
+        expect(sql).toContain('ORDER BY created_at ASC, id ASC');
+        expect(mocks.execute.mock.calls[0][2]).toMatchObject({ '@user_id': 'usr_1' });
+        expect(sql).not.toContain('AND created_at >=');
+    });
+
+    test('adds the date filter only when a start date is given', async () => {
+        mocks.execute.mockImplementation(async () => undefined);
+
+        await feed.getStatusRowsForUserId('usr_1', '2026-09-01T00:00:00.000Z');
+
+        expect(mocks.execute.mock.calls[0][1]).toContain('AND created_at >= @created_after');
+        expect(mocks.execute.mock.calls[0][2]).toMatchObject({ '@created_after': '2026-09-01T00:00:00.000Z' });
+    });
+
+    test('coerces null columns to empty strings', async () => {
+        mocks.execute.mockImplementation(async (callback) => {
+            callback(['2026-09-20T00:00:00.000Z', null, null, null, null]);
+            return undefined;
+        });
+
+        const result = await feed.getStatusRowsForUserId('usr_1');
+
+        expect(result[0]).toMatchObject({ status: '', status_description: '', previous_status: '' });
+    });
+
+    test('does not filter out rows whose light stayed put', async () => {
+        mocks.execute.mockImplementation(async () => undefined);
+
+        await feed.getStatusRowsForUserId('usr_1');
+
+        // a text-only edit keeps the light but is still a real change, so the read
+        // must not discard rows where status equals previous_status
+        expect(mocks.execute.mock.calls[0][1]).not.toContain('status != previous_status');
+    });
+});
+
+describe('feed.getPresenceRowsForUserId', () => {
+    beforeEach(() => {
+        mocks.execute.mockReset();
+    });
+
+    test('maps rows to time and type, oldest first', async () => {
+        mocks.execute.mockImplementation(async (callback) => {
+            callback(['2026-09-20T00:00:00.000Z', 'Online']);
+            return undefined;
+        });
+
+        const result = await feed.getPresenceRowsForUserId('usr_1');
+
+        expect(result).toEqual([{ created_at: '2026-09-20T00:00:00.000Z', type: 'Online' }]);
+        const sql = mocks.execute.mock.calls[0][1];
+        expect(sql).toContain('usr123_feed_online_offline');
+        expect(sql).toContain('ORDER BY created_at ASC, id ASC');
+        expect(sql).not.toContain('AND created_at >=');
+    });
+
+    test('adds the date filter only when a start date is given', async () => {
+        mocks.execute.mockImplementation(async () => undefined);
+
+        await feed.getPresenceRowsForUserId('usr_1', '2026-09-01T00:00:00.000Z');
+
+        expect(mocks.execute.mock.calls[0][1]).toContain('AND created_at >= @created_after');
+    });
+});
+
+describe('feed.getPlayersWithStatusHistory', () => {
+    beforeEach(() => {
+        mocks.execute.mockReset();
+    });
+
+    test('returns one entry per player with a change count', async () => {
+        mocks.execute.mockImplementation(async (callback) => {
+            callback(['usr_1', 'Tester', 91, '2026-09-20T00:00:00.000Z']);
+            return undefined;
+        });
+
+        const result = await feed.getPlayersWithStatusHistory();
+
+        expect(result).toEqual([
+            {
+                userId: 'usr_1',
+                displayName: 'Tester',
+                changes: 91,
+                lastAt: '2026-09-20T00:00:00.000Z'
+            }
+        ]);
+        expect(mocks.execute.mock.calls[0][1]).toContain('GROUP BY user_id');
+        expect(mocks.execute.mock.calls[0][1]).not.toContain('WHERE');
+    });
+
+    test('filters by start date when given', async () => {
+        mocks.execute.mockImplementation(async () => undefined);
+
+        await feed.getPlayersWithStatusHistory('2026-09-01T00:00:00.000Z');
+
+        expect(mocks.execute.mock.calls[0][1]).toContain('WHERE created_at >= @created_after');
+        expect(mocks.execute.mock.calls[0][2]).toMatchObject({ '@created_after': '2026-09-01T00:00:00.000Z' });
+    });
+});
+
 describe('feed.addBioToDatabase', () => {
     beforeEach(() => {
         mocks.executeNonQuery.mockReset();

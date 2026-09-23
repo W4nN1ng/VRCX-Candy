@@ -299,6 +299,17 @@
                             </div>
                         </TooltipWrapper>
 
+                        <TooltipWrapper side="right" :content="t('view.charts.friend_status_lights.tips.coverage')">
+                            <div
+                                class="flex justify-between items-start gap-2 text-xs cursor-pointer hover:text-foreground"
+                                @click="openStatusLights()">
+                                <span class="text-muted-foreground shrink-0">{{
+                                    t('view.charts.friend_status_lights.header')
+                                }}</span>
+                                <Lightbulb class="size-3.5 shrink-0 text-muted-foreground" />
+                            </div>
+                        </TooltipWrapper>
+
                         <template v-if="currentUser.id !== userDialog.id">
                             <TooltipWrapper
                                 side="right"
@@ -482,7 +493,7 @@
 </template>
 
 <script setup>
-    import { Footprints, History, Info, Languages, Pencil, Trash2, User } from 'lucide-vue-next';
+    import { Footprints, History, Info, Languages, Lightbulb, Pencil, Trash2, User } from 'lucide-vue-next';
     import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
     import IconFrame from '@/components/IconFrame.vue';
     import { computed, ref, watch } from 'vue';
@@ -586,6 +597,10 @@
 
     function openFootprints() {
         router.push({ name: 'charts-friend-footprints', query: { user: userDialog.value.id } });
+    }
+
+    function openStatusLights() {
+        router.push({ name: 'charts-friend-status-lights', query: { user: userDialog.value.id } });
     }
 
     async function translateBio() {

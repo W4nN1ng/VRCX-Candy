@@ -713,6 +713,76 @@
                     "ongoing": "still here",
                     "unknown": "left offline"
                 }
+            },
+            "friend_status_lights": {
+                "tab_label": "Status Lights",
+                "header": "Friend Status Lights",
+                "search_placeholder": "Search friends",
+                "no_candidates": "No friend has a status light record yet",
+                "candidate_changes": "{count} changes",
+                "empty": "No status light was recorded for this friend in the selected range",
+                "toggle": {
+                    "inferred": "Estimate unrecorded time"
+                },
+                "tips": {
+                    "coverage": "VRCX can only show the status lights it saw while running, and only for friends, so this is not the full history",
+                    "shares": "The percentages cover only the time a light was actually recorded. Time that was never recorded is listed separately below and left out of the percentages, so the numbers are not diluted by guesswork",
+                    "inferred": "Counts the unrecorded stretch before each light change as the light that came before it. Measured against this database that estimate matches the next recorded light about 90% of the time, so treat the result as an estimate",
+                    "buckets": "Online with an unknown light: the player was online but no light change was ever recorded. Offline: VRCX saw them log off. Unrecorded: VRCX was not running, so nothing is known about that stretch"
+                },
+                "period": {
+                    "days_7": "7 days",
+                    "days_30": "30 days",
+                    "days_90": "90 days",
+                    "all": "All"
+                },
+                "light": {
+                    "online": "Online",
+                    "joinme": "Join Me",
+                    "askme": "Ask Me",
+                    "busy": "Do Not Disturb"
+                },
+                "stats": {
+                    "recorded": "Time with a light",
+                    "since": "since {date}",
+                    "days": "Days seen",
+                    "last_change": "last change {time}",
+                    "most_used": "Most used",
+                    "most_used_hint": "{percent}% of recorded time",
+                    "switches": "Light changes",
+                    "longest_hint": "longest {light} {duration}"
+                },
+                "section": {
+                    "shares": "How the four lights divide up",
+                    "timeline": "When each light was on",
+                    "hours": "Which light at which hour",
+                    "descriptions": "Custom text edits"
+                },
+                "bucket": {
+                    "unknown_online": "Online, light unknown",
+                    "offline": "Offline",
+                    "unrecorded": "Unrecorded"
+                },
+                "row": {
+                    "average": "avg {duration}"
+                },
+                "state": {
+                    "offline": "Offline",
+                    "unknown": "Unknown",
+                    "inferred": "estimated"
+                },
+                "timeline": {
+                    "recorded": "{duration} with a light",
+                    "no_change": "No light was recorded that day"
+                },
+                "hours": {
+                    "peak": "busiest {hour}:00 - {duration}",
+                    "hour": "{hour}:00"
+                },
+                "descriptions": {
+                    "hint": "VRCX also records edits to the custom text attached to a light. Those change the text without changing the light, so they never appear in the timeline above",
+                    "empty": "No custom text was edited in the selected range"
+                }
             }
         },
         "tools": {

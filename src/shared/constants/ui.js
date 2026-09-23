@@ -121,6 +121,13 @@ const navDefinitions = [
         routeName: 'charts-friend-footprints'
     },
     {
+        key: 'charts-friend-status-lights',
+        icon: 'ri-traffic-light-line',
+        tooltip: 'view.charts.friend_status_lights.tab_label',
+        labelKey: 'view.charts.friend_status_lights.tab_label',
+        routeName: 'charts-friend-status-lights'
+    },
+    {
         key: 'tools',
         icon: 'ri-tools-line',
         tooltip: 'nav_tooltip.tools',
