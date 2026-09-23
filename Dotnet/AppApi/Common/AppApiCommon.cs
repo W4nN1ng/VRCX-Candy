@@ -169,6 +169,22 @@ namespace VRCX
             return null;
         }
 
+        /// <summary>
+        /// Size of a file in bytes, or -1 when it cannot be read. Lets the caller turn down an
+        /// oversized picture without loading the whole thing into memory first.
+        /// </summary>
+        public string GetFileSize(string path)
+        {
+            try
+            {
+                return File.Exists(path) ? new FileInfo(path).Length.ToString() : "-1";
+            }
+            catch (Exception)
+            {
+                return "-1";
+            }
+        }
+
         public virtual Task<bool> TryOpenInstanceInVrc(string launchUrl)
         {
             return VRCIPC.Send(launchUrl);

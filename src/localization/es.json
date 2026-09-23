@@ -589,6 +589,8 @@
                     "sidebar_opacity": "Sidebar opacity",
                     "opacity_description": "Lower this if the picture makes the text hard to read",
                     "missing": "The chosen wallpaper could not be read, so it has been turned off",
+                    "too_big": "That picture is {width}x{height}, too large for a wallpaper. Use 4K (3840x2160) or smaller.",
+                    "too_many_bytes": "That file is too large to load as a wallpaper. Use 4K (3840x2160) or smaller.",
                     "pick_failed": "Could not open that picture"
                 }
             },

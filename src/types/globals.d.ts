@@ -184,6 +184,7 @@ declare global {
         GetColourBulk(userIds: string[]): Promise<Record<string, number>>;
         SetAppLauncherSettings(enabled: boolean, killOnExit: boolean, runProcessOnce: boolean): Promise<void>;
         GetFileBase64(path: string): Promise<string | null>;
+        GetFileSize(path: string): Promise<string>;
         TryOpenInstanceInVrc(launchUrl: string): Promise<boolean>;
 
         // Image Upload (Cef Only)

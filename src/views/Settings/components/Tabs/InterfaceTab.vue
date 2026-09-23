@@ -563,7 +563,7 @@
     import { Switch } from '@/components/ui/switch';
     import { Slider } from '@/components/ui/slider';
     import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-    import { wallpaperImageStyle } from '@/shared/utils';
+    import { checkWallpaperSize, wallpaperImageStyle } from '@/shared/utils';
     import { getLanguageName, languageCodes } from '@/localization';
     import { APP_CJK_FONT_PACKS, APP_FONT_CONFIG, APP_FONT_DEFAULT_KEY, APP_FONT_FAMILIES } from '@/shared/constants';
     import { Button } from '@/components/ui/button';
@@ -706,6 +706,13 @@
                       'Images (*.png;*.jpg;*.jpeg;*.webp;*.gif;*.bmp)|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.bmp'
                   );
             if (!filePath) {
+                return;
+            }
+            // cheap gate on the file size so an absurd picture is never read into memory;
+            // the pixel limit is checked where the file is actually decoded
+            const sizeBytes = Number(await AppApi.GetFileSize(filePath));
+            if (!checkWallpaperSize(sizeBytes, '').ok) {
+                toast.error(t('view.settings.appearance.wallpaper.too_many_bytes'));
                 return;
             }
             setWallpaperValue('path', filePath);
