@@ -63,6 +63,21 @@
 | `e49e32e4` | 加群判定修复 | 见下面「加群弹窗」一条，**这是外部用户实际踩到的 bug** |
 | `de5a3650` | 命名 + 帮助屏 + 新图标 | 侧边栏顶部「VRCX-Candy」+ 问号按钮；`WhatThisBuildAddsDialog.vue`；14 个语言文件 |
 | `f1d6ea27` | 独立程序 | `Dotnet/*` 改名 + `candy/` 打包脚本 + 关掉自动更新 |
+| `24dbdaad` + `9cb758b4` | 节能模式（实测收益见下） | `MainForm` 在窗口不可见时 `WasHidden(true)`；`CefService` 关掉后台定时器节流；状态栏迷你图不再每秒重建画布 |
+
+### 节能模式的实测结论（重要，别重复踩）
+
+`WasHidden` 确实生效（日志有 `Energy saving: on/off`），但**稳态下几乎不省内存**：可见 100 秒后 851 MB / GPU 125 MB / 渲染 320 MB，最小化 25 秒后 923 MB / 166 MB / 350 MB —— 不降反微升。原因很朴素：**一个静态页面本来就不重绘**，Chromium 只在失效时绘制，所以"停止绘制"这个动作省不到东西。
+
+第一次测出的 743→320 MB 是假象：那次"可见"是在启动后 40 秒测的，程序还在加载，数字被启动开销灌高了。**测内存必须等稳态**，`vrcx-mod/measure-energy.ps1` 现在默认等 100 秒。
+
+结论：想真的把 320 MB 那个渲染进程降下来，只有两条路，都要用户先选：
+1. 裁缓存（用户已明确拒绝，因为重开窗口要多加载几秒）。
+2. 先测清 320 MB 的构成再定点优化。注意 `AppData\Roaming\VRCX\ImageCache` 是**空的**，VRCX 不用它；图片是模板里 `<img src>` 直连远程地址，解码位图落在 CEF 自己的 `userdata\cache` 里。要拿 JS 堆明细得用 `--debug` 启动（会开 8089 远程调试），但**调试模式会把地址切成 `http://localhost:9000`**，所以必须同时跑 `npm run dev`，测的就不再是生产产物了——这条路要么接受偏差，要么改 `MainForm` 的地址选择逻辑。
+
+### 构建产物的一个坑
+
+`build/Cef` 是 `candy/build.ps1` 用 Release/自包含产出的完整可运行目录。**手工跑 `dotnet build Dotnet/VRCX-Cef.csproj -p:Platform=x64` 会把里面的 exe 换成 Debug 版本**，与目录里其余 Release 原生文件错配，程序启动后只有一个进程、几秒后静默退出——看起来像代码崩了，其实是产物脏了。改完 C# 要么走完整 `candy/build.ps1`，要么 `-c Release` 并且别拿那个目录当可运行产物测。
 
 **加群弹窗的坑（务必记住）**：判定"这人是不是已经在群里"**必须直接查 `groupRequest.getGroup()` 返回的 `membershipStatus`**，不能用 `groupStore.currentUserGroups`。那个 Map 在登录时**先用配置表 `vrcx_currentusergroups_<userId>` 的上次会话缓存填一遍**，之后才发网络请求（`groupCoordinator.js` 里 `setCurrentUserGroupsInit(true)` 在 `getCurrentUserGroups()` 之前）。于是"上次跑 VRCX 时还是成员、之后退了群"的人会被当成成员 → 弹窗被静默吞掉 → 还写下了"问过了"的标记 → 从此永不出现。规则抽在 `src/shared/utils/groupInvite.js`（纯函数 + 单测），配置键已升到 `VRCX_group_invite_seen_v2`。
 
