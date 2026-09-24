@@ -34,15 +34,19 @@
 
 ---
 
-## 2. 发布状态（2026-09-23）
+## 2. 发布状态（2026-09-25）
 
 | 项 | 值 |
 | --- | --- |
 | 仓库 | 公开（`visibility: public`） |
-| Release | tag `v2026.09.16-candy1`，标题 `VRCX-Candy 2026.09.16` |
-| 标签指向 | `f1d6ea27`（`my-vrcx` 顶端）—— 已用 GitHub API 核对过 |
-| 附件 | `VRCX-Candy-Setup.exe`（196 MB）、`VRCX-Candy-2026.09.16-portable.zip`（268 MB） |
-| 桌面上还有 | 上面两个的副本 + `GitHub发布说明.md`（发布用文案）+ 两个**旧的纯界面 zip**（`-r2.zip`、`2026.09.16.zip`，只含 html，别和完整程序搞混） |
+| **最新 Release** | tag `v2026.09.16-candy2`，标题 `VRCX-Candy 2026.09.16 (更新版 candy2)` —— `/releases/latest` 已确认指向它 |
+| 标签指向 | `b249a8fd`（`my-vrcx` 顶端）—— 已用 `git ls-remote` 核对 |
+| 附件 | `VRCX-Candy-Setup.exe`（205,927,894 B）、`VRCX-Candy-2026.09.16-portable.zip`（280,713,875 B）；两个都用 SHA256 和桌面/仓库产物逐字节核对过 |
+| 上一个 Release | `v2026.09.16-candy1`（`f1d6ea27`）**原样保留**，附件没动 |
+| 发布说明正文 | `candy/release-notes-v2026.09.16-candy2.md`（仓库里留着，方便下次照格式写） |
+| 桌面上还有 | 上面两个包的副本 + `GitHub发布说明.md`（candy1 的旧文案）+ 两个**旧的纯界面 zip**（`-r2.zip`、`2026.09.16.zip`，只含 html，别和完整程序搞混） |
+
+**程序内版本号仍是 `2026.09.16`**（用户决定不动 `Version` 文件，因为改它要重跑 12 分钟打包）。所以 candy1 / candy2 在窗口标题和「关于」里看不出区别，只能靠发布页和文件 SHA 区分。
 
 **"干净"的含义**：这两个分发包是正式版——没有临时调试开关，弹窗逻辑是修好的那一版。要验可以直接解压 zip 读 `html/assets/plugins-*.js`（zip 能直接读；NSIS 安装包是 LZMA 自解压，本机没有工具能拆，只能靠"同一次构建产出"来推断）。
 
@@ -120,6 +124,8 @@
 ## 5. 环境坑（不看会浪费你一小时）
 
 - **github.com 的 HTTPS 被 TLS 层掐断**（curl 28 / 000），但 **SSH 22 端口通**。拉上游用 `upstream`（ghfast.top 镜像）或 `upstream_github` + 代理 `http://127.0.0.1:10090`（香蕉VPN 的系统代理，仅 VPN 开着时存在）。推送走 SSH，不需要梯子。`api.github.com` 是通的，可以直接用它核对仓库/发行版状态。
+  - **但 `api.github.com` 的 TLS 会间歇失败**（`curl (35) schannel: failed to receive handshake` / `(28) Could not connect`），实测同一个请求第 3 次才通。**所有 API 调用都要包一层重试**（`for i in 1 2 3; do curl ... && break; sleep 3; done`），不然会误判成"没权限"或"文件不存在"。
+  - **发 Release 只能走 REST API**：这台机器没装 `gh`、凭据管理器里没有 github 条目、内置浏览器也没登录 GitHub，而 SSH 推不了 Release 和附件。可行做法是让用户建一个 **fine-grained PAT**（只勾 `Contents: Read and write`、只给这一个仓库、过期设 1 天），token 用环境变量传给命令、不写进任何文件。建 Release 用 `POST /repos/{o}/{r}/releases`（`tag_name` 不存在时 GitHub 会自己按 `target_commitish` 打 tag），传附件用 **`uploads.github.com`**（这个域名是通的，`-T 文件` + `Content-Type: application/octet-stream`，205 MB 约 78 秒、281 MB 约 103 秒）。附件回读会带 `digest: sha256:...`，拿它和本地 SHA256 比一次，能证明不是半截文件。用完提醒用户去 `Settings → Developer settings → Fine-grained tokens` 删掉。
 - **PowerShell 执行策略是 Restricted**，`.ps1` 不能直接跑；用 `powershell -NoProfile -ExecutionPolicy Bypass -File xxx.ps1` 最省事（不用改机器策略，也不用 `.cmd` 包装）。`.ps1` 文件必须存成 **UTF-8 带 BOM**，否则 PS 5.1 按 GBK 解析会把中文截断。
 - **`vitest` 在干净 master 上就有 42 个测试文件失败**（Windows/jsdom 环境问题，与代码无关）。判断有没有引入回归要**比对失败文件的集合**，不能看总数。
   `npx vitest run 2>&1 | grep -oE "FAIL +[^ ]+\.(test|spec)\.[jt]s" | sed -E 's/^FAIL +//' | sort -u`
