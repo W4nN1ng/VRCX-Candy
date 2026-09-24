@@ -122,7 +122,8 @@ export const useAppearanceSettingsStore = defineStore(
                 'charts-hot-worlds',
                 'charts-friend-footprints',
                 'charts-friend-status-lights',
-                'charts-friend-together'
+                'charts-friend-together',
+                'candy-auto-status'
             ].includes(currentRouteName);
         });
 
