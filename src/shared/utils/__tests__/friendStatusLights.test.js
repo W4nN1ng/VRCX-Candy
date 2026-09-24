@@ -113,16 +113,47 @@ describe('buildStatusIntervals', () => {
         expect(intervals.map((interval) => interval.online)).toEqual([true, false]);
     });
 
-    test('treats a status change as proof the player was online', () => {
+    test('ignores a status change that lands inside an offline window', () => {
         const intervals = buildStatusIntervals(
-            [statusRow(MINUTE, 'ask me', { previous: 'active' })],
+            [statusRow(MINUTE, 'ask me', { previous: 'active' }), statusRow(30 * MINUTE, 'busy')],
             [presenceRow(0, 'Online'), presenceRow(MINUTE, 'Offline')],
             { now: Date.parse(at(HOUR)) }
         );
 
-        // presence says offline straight after, but the change still opened a session
-        const last = intervals[intervals.length - 1];
-        expect(last).toMatchObject({ online: true, light: 'ask me', known: true });
+        // VRChat writes feed_status rows for players who edit their light on the
+        // website without starting the game, so presence keeps ownership here.
+        expect(intervals).toHaveLength(2);
+        expect(intervals[1]).toMatchObject({ online: false, light: null, known: false });
+        expect(intervals.some((interval) => interval.light === 'ask me' || interval.light === 'busy')).toBe(false);
+    });
+
+    test('does not carry an offline website edit into the next session', () => {
+        const day = 24 * HOUR;
+        const intervals = buildStatusIntervals(
+            // the real report: logged off, a red light row 27 minutes later, then
+            // nothing for days, and the page said "busy for 4 days 22 hours"
+            [statusRow(HOUR + 27 * MINUTE, 'busy', { previous: 'join me' }), statusRow(5 * day, 'busy')],
+            [presenceRow(0, 'Online'), presenceRow(HOUR, 'Offline'), presenceRow(5 * day + MINUTE, 'Online')],
+            { now: Date.parse(at(5 * day + 2 * HOUR)) }
+        );
+
+        const busy = intervals
+            .filter((interval) => interval.light === 'busy')
+            .reduce((total, interval) => total + interval.durationMs, 0);
+        expect(busy).toBe(0);
+        expect(summarizeStatusLights(intervals).lights.busy.runs).toBe(0);
+    });
+
+    test('still trusts a status change while presence has said nothing', () => {
+        const intervals = buildStatusIntervals(
+            [statusRow(MINUTE, 'ask me', { previous: 'active' })],
+            [presenceRow(5 * HOUR, 'Online')],
+            { now: Date.parse(at(6 * HOUR)) }
+        );
+
+        // A history whose presence feed starts late must keep its lights rather than
+        // collapsing to zero, so an uncontradicted change wins as before.
+        expect(intervals[0]).toMatchObject({ online: true, light: 'ask me', known: true });
     });
 
     test('fills the stretch before a session first change from previous_status', () => {
@@ -151,14 +182,16 @@ describe('buildStatusIntervals', () => {
 
     test('does not reach back across an offline stretch to fill a light in', () => {
         const intervals = buildStatusIntervals(
-            [statusRow(10 * MINUTE, 'active'), statusRow(5 * HOUR, 'busy', { previous: 'active' })],
-            [presenceRow(0, 'Online'), presenceRow(HOUR, 'Offline')],
+            [statusRow(10 * MINUTE, 'active'), statusRow(5 * HOUR, 'busy', { previous: 'join me' })],
+            [presenceRow(0, 'Online'), presenceRow(HOUR, 'Offline'), presenceRow(4 * HOUR, 'Online')],
             { now: Date.parse(at(6 * HOUR)) }
         );
 
-        // the four hours before the unseen login stay offline rather than inheriting active
+        // the three hours before the login stay offline rather than inheriting active
         expect(intervals[2]).toMatchObject({ online: false, light: null, inferred: false });
-        expect(intervals[3]).toMatchObject({ online: true, light: 'busy' });
+        // a fresh session is the only stretch allowed to borrow a previous light
+        expect(intervals[3]).toMatchObject({ online: true, light: 'join me', inferred: true });
+        expect(intervals[4]).toMatchObject({ online: true, light: 'busy', known: true });
     });
 
     test('trusts a long stretch that both of its ends witness', () => {

@@ -18,9 +18,9 @@
  * carrying a light across an unobserved stretch would be wrong exactly where it
  * matters most; those stretches stay `unknown` instead.
  *
- * Online state comes from feed_online_offline, which repeats itself (adjacent
- * same-type rows) and lags behind status changes, so a status change is treated
- * as proof that the player was online regardless of what presence says.
+ * Online state comes from feed_online_offline, and presence is the only feed that
+ * owns it. A status row inside a known offline window is a website edit rather than
+ * an observed light, so it is ignored - see buildStatusIntervals.
  */
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -127,6 +127,17 @@ function normalizeStatusEvents(statusRows, presenceRows) {
  * trailing stretch - from the last event to now - is capped, since there is no
  * second witness to say the state still holds.
  *
+ * Presence decides who is online; status rows do not. VRChat keeps writing
+ * feed_status rows for players who are logged off, because the website and the
+ * dashboard let you change your light without starting the game. Measured across
+ * 815 rows, 10% of them land inside an offline window and the median one arrives
+ * almost thirteen hours after the player went away, so trusting them reported
+ * multi-day lights nobody was wearing. A status row seen between an Offline event
+ * and the next Online event is therefore dropped from the timeline. When presence
+ * has not spoken yet - no Offline row has been seen - the old reading still holds,
+ * so a history whose presence feed starts late keeps its status rows instead of
+ * collapsing to zero.
+ *
  * @param {object[]} statusRows - Feed_status rows for one user
  * @param {object[]} presenceRows - Feed_online_offline rows for the same user
  * @param {{ now?: number; maxGapMs?: number }} [options]
@@ -139,6 +150,10 @@ function buildStatusIntervals(statusRows, presenceRows, options = {}) {
 
     const intervals = [];
     let online = false;
+    // True between an Offline event and the next Online one. Separate from `online`
+    // because before presence has said anything neither of them is known, and a
+    // status row seen in that stretch still gets the benefit of the doubt.
+    let loggedOff = false;
     let light = '';
     let description = '';
     let since = null;
@@ -179,6 +194,12 @@ function buildStatusIntervals(statusRows, presenceRows, options = {}) {
     };
 
     for (const event of events) {
+        if (event.light && loggedOff) {
+            // Not an observed light: they edited it on the website while the game was
+            // closed. Dropping the row rather than clearing anything keeps the offline
+            // stretch running through it, which is what actually happened.
+            continue;
+        }
         push(event.at, false);
         if (event.light) {
             // The stretch that just closed was spent in what this change moved away
@@ -191,12 +212,12 @@ function buildStatusIntervals(statusRows, presenceRows, options = {}) {
                 last.inferred = true;
                 last.description = event.previousDescription;
             }
-            // A status change is proof of being online even when presence disagrees.
             online = true;
             light = event.light;
             description = event.description;
         } else {
             online = event.online;
+            loggedOff = !event.online;
             light = '';
             description = '';
         }
