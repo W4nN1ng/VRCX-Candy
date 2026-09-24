@@ -114,16 +114,17 @@ export const useAppearanceSettingsStore = defineStore(
         const isNavCollapsed = ref(true);
         const isSideBarTabShow = computed(() => {
             const currentRouteName = router.currentRoute.value?.name;
+            // Only the pages upstream hides. The Candy pages used to be listed here too,
+            // on the theory that the wide layouts needed the room, but that made the
+            // friend list vanish every time one was opened and the user has to pull it
+            // back by hand. Leaving them out keeps whatever the user last set, which the
+            // resizable panel already persists.
             return ![
                 'friends-locations',
                 'friend-list',
                 'charts-instance',
                 'charts-mutual',
-                'charts-hot-worlds',
-                'charts-friend-footprints',
-                'charts-friend-status-lights',
-                'charts-friend-together',
-                'candy-auto-status'
+                'charts-hot-worlds'
             ].includes(currentRouteName);
         });
 

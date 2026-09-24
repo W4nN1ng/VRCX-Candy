@@ -157,6 +157,12 @@
 - **"离线窗口里收到的状态行"不是在线证据，是网页端改灯。** `friendStatusLights.js` 原先写着 `A status change is proof of being online` → `online = true`，把一个已关闭的离线窗口重新打开。实测 815 条 `feed_status` 行里 **82 条（10.1%）落在离线窗口内**，而且**不是滞后**：只有 3.9% 在离线后 2 分钟内，5.3% 在 5 分钟内，10.5% 在 30 分钟内，**中位数 774 分钟（12.9 小时）**。VRChat 允许不开游戏、在官网/仪表盘改灯，这些行是真的但描述的是"人不在游戏里"。后果：某好友 09-19 15:49 下线，16:16 网页改红灯，页面报"最长一次请勿打扰挂了 4 天 22 小时"。修法：`buildStatusIntervals` 里加 `loggedOff` 标记（Offline 事件置真、Online 事件置假），落在离线窗口内的 `feed_status` 事件整条丢弃。**保留的降级行为**：`loggedOff` 初值是假，所以 presence 还没开口（没见过 Offline 行）时状态行照旧生效——否则 presence 表起点晚于 status 表的用户，整段历史会直接归零。修完该好友 30 天口径：busy 从 4 天 22 小时降到 1 分钟，观察到的总时长 4h23。
 - **判断有没有引入测试回归要比对失败文件集合，不看总数**（见上）：本次全量 `npx vitest run` 是 40 个文件失败 / 166 条用例，全部是 `useChartsStore` 之类的**陈旧 mock** 和上游快照问题，`friendStatusLights.test.js` 32 条全绿。
 
+### 2026-09-25 这一轮
+
+- **改版页面不要藏右侧好友栏。** 我原先把 `charts-friend-footprints`、`charts-friend-status-lights`、`charts-friend-together`、`candy-auto-status` 四个 key 加进了 `appearance.js` 的 `isSideBarTabShow` 黑名单，理由是"页面宽、被挤会换行"。实际代价更大：`MainLayout.vue` 里有个 `watch(isSideBarTabShow)`，一进这些路由就无条件 `asidePanelRef.collapse()`，用户每次打开都要手动把好友列表拉出来。**已经把这四个撤掉**，现在黑名单和上游一致（只有 `friends-locations`、`friend-list`、`charts-instance`、`charts-mutual`、`charts-hot-worlds`）。右侧栏的展开/收起状态本来就由 `ResizablePanelGroup` 的 `auto-save-id="vrcx-main-layout-right-sidebar"` 存进 localStorage，撤掉强制折叠之后"用户上次是开着的"会自然保留。
+- **未解决 / 未验证**：用户报告"手动拉出来以后，最小化窗口几分钟，好友列表又缩回去了"。前端没有任何 `visibilitychange` 或 resize 折叠逻辑，宿主那边的节能只调 `WasHidden()`、不改控件尺寸，所以最可能是 splitter 在窗口最小化期间按 0 宽容器重算、把 aside 算成 0 并被 auto-save 存下来。**这条只是推断，没实测。** 要验的话：用 `--debug` 启动，在最小化前后各读一次 `localStorage['vrcx-main-layout-right-sidebar']`。撤掉强制折叠之后这条路径不再是这些页面独有的，如果还复现，就说明和路由无关。
+- **`MainLayout.test.js` 里那两条好友栏测试是跑不起来的**（`SyntaxError: Need to install with app.use function`，vue-i18n 在挂载那一堆对话框时炸），属于基线失败。也就是说**好友栏折叠行为没有任何在跑的保护**，改 `isSideBarTabShow` 或 `MainLayout.vue` 的 watcher 时没有测试会拦住你。
+
 ---
 
 ## 6. 数据口径（sqlite 只读）
@@ -230,7 +236,9 @@ powershell -ExecutionPolicy Bypass -File candy\build.ps1
 
 ### 加新图表页要在 8 个文件里注册
 
-漏一个就出问题（用 `grep -rn "charts-hot-worlds" src/` 逐条对，最省事）：`plugins/router.js`、`shared/constants/ui.js`、`nav-menu/navLayoutDefaults.js`、`nav-menu/navMenuUtils.js` 的 `chartsKeys`（有 `every(key => definitionMap.has(key))` 的门槛，漏了**整个 charts 文件夹都不显示**；改版功能现在在 `CANDY_KEYS` 里）、`shared/constants/dashboard.js`、`stores/settings/appearance.js` 的 `isSideBarTabShow`（漏了右侧好友栏不隐藏，整页布局被挤换行）、`Dashboard/components/panelRegistry.js`，外加 `nav-menu/__tests__/navMenuUtils.test.js` 里的 fixture 和期望数组。
+漏一个就出问题（用 `grep -rn "charts-hot-worlds" src/` 逐条对，最省事）：`plugins/router.js`、`shared/constants/ui.js`、`nav-menu/navLayoutDefaults.js`、`nav-menu/navMenuUtils.js` 的 `chartsKeys`（有 `every(key => definitionMap.has(key))` 的门槛，漏了**整个 charts 文件夹都不显示**；改版功能现在在 `CANDY_KEYS` 里）、`shared/constants/dashboard.js`、`Dashboard/components/panelRegistry.js`，外加 `nav-menu/__tests__/navMenuUtils.test.js` 里的 fixture 和期望数组。
+
+**`stores/settings/appearance.js` 的 `isSideBarTabShow` 不在名单里——别再往里面加。** 见第 5 节"改版页面不要藏右侧好友栏"。
 
 **只对老用户生效的额外一步**：新 key 必须出现在 `navMenuUtils.js` 的 `CANDY_KEYS` 里，否则它会被自动补漏逻辑甩到菜单最底部而不是进 Candy 文件夹（存档布局优先于默认值，见第 5 节）。
 
