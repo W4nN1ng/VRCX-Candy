@@ -638,7 +638,7 @@
                 },
                 "footprints": {
                     "title": "Friend footprints",
-                    "description": "Charts has a page for where a friend has been: the maps they visit most, the hours they are usually around, and a day by day timeline."
+                    "description": "The Candy folder has a page for where a friend has been: the maps they visit most, the hours they are usually around, and a day by day timeline."
                 },
                 "status_lights": {
                     "title": "Status light history",
@@ -646,15 +646,15 @@
                 },
                 "together": {
                     "title": "Friends together",
-                    "description": "Records the times your friends were in a map together without you, so you can see what you missed. Also under Charts."
+                    "description": "Records the times your friends were in a map together without you, so you can see what you missed. Also under Candy."
                 },
                 "wallpaper": {
                     "title": "Custom wallpaper",
                     "description": "Put a picture of your own behind the interface, with brightness, blur and crop controls. Settings, under Interface."
                 },
-                "group_invite": {
-                    "title": "The group prompt",
-                    "description": "The one time this build asks whether you want to join the group behind it. Answering either way is fine and it will not ask again."
+                "auto_status": {
+                    "title": "Automatic status",
+                    "description": "Changes your status light and its signature when you join a specific friend or enter a specific map, and puts your old status back once you leave. When several rules match at once the strongest light wins: busy over ask me over active over join me. It is under Candy."
                 }
             },
             "reopen_hint": "This screen is shown once. You can open it again from the help button at the top of the sidebar.",

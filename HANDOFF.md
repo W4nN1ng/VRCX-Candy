@@ -238,6 +238,10 @@ powershell -ExecutionPolicy Bypass -File candy\build.ps1
 
 `src/shared/utils/` 下写纯函数聚合层（带单测）→ `src/services/database/feed.js` 加按 userId 的查询 → `src/views/Charts/components/` 加页面 → 注册路由/导航 → 本地化用脚本插 14 个语言文件（zh-CN/zh-TW/ja 手写翻译，其余落英文）。
 
+**每加一个改版功能，还要在侧边栏那个「这个改版加了什么」弹窗里挂一张卡片**：`src/components/onboarding/WhatThisBuildAddsDialog.vue` 里是一个**硬编码的 `features` 数组**（key + lucide 图标），文字全在 `view.help.features.<key>.{title,description}` 这 14 份语言文件里。只改数组不改语言文件会直接渲染成 key 名。删功能同理，两边都要动。
+- 改这 14 份 JSON 的可靠做法：先验证 `JSON.stringify(JSON.parse(raw), null, 4) + '\n' === raw`（**实测 14 份全部成立**，所以可以解析→改→整体序列化，diff 只会命中真正改的那几行），再在写盘前 `JSON.parse` 一遍输出、失败就不写。这条比逐行文本插入省事且不会漏逗号。
+- 语言文件之间**本来就不齐**（`en.json` 3258 个 key，`ko.json` 只有 1559 个），这是上游翻译欠账，vue-i18n 会回落英文，别去"补齐"。判断自己有没有改坏，要比对**同一个 key 在 14 份里都在不在**，不要比对总数。
+
 ---
 
 ## 9. 干活的习惯
