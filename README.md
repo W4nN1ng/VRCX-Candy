@@ -1,143 +1,89 @@
 <div align="center">
 
-# <img src="https://raw.githubusercontent.com/vrcx-team/VRCX/master/images/VRCX.ico" width="64" height="64"> </img> VRCX
+# <img src="images/VRCX-Candy.png" width="72" height="72" alt="VRCX-Candy"> VRCX-Candy
 
-[![GitHub release](https://img.shields.io/github/release/vrcx-team/VRCX.svg)](https://github.com/vrcx-team/VRCX/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/vrcx-team/VRCX/total?color=6451f1)](https://github.com/vrcx-team/VRCX/releases/latest)
-[![GitHub Workflow Status](https://github.com/vrcx-team/VRCX/actions/workflows/github_actions.yml/badge.svg)](https://github.com/vrcx-team/VRCX/actions/workflows/github_actions.yml)
-[![VRCX Discord Invite](https://img.shields.io/discord/854071236363550763?color=%237289DA&logo=discord&logoColor=white&label=discord)](https://vrcx.app/discord)
+[VRCX](https://github.com/vrcx-team/VRCX) 的个人中文改版。原版有的东西**一个都没删**，在底下多加了几个自己的功能，并且打包成不用装原版也能直接用的独立程序。
 
-| **English** | [Français](./README/README.fr.md) | [日本語](./README/README.jp.md) | [简体中文](./README/README.zh_CN.md) | [Italiano](./README/README.it.md) | [Русский](./README/README.ru_RU.md) | [Español](./README/README.es.md) | [Polski](./README/README.pl.md) | [ภาษาไทย](./README/README.th.md) | [Magyar](./README/README.hu.md)
+[![Release](https://img.shields.io/github/v/release/W4nN1ng/VRCX-Candy?label=release&color=e0559a)](https://github.com/W4nN1ng/VRCX-Candy/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/W4nN1ng/VRCX-Candy/total?color=6451f1&label=downloads)](https://github.com/W4nN1ng/VRCX-Candy/releases/latest)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-VRCX is an assistant/companion application for VRChat that provides information about and helps you accomplish various things related to VRChat in a more convenient fashion than relying on the plain VRChat client (desktop or VR), or website alone. It also includes some other neat features outlined below.
+**[→ 去下载最新版](https://github.com/W4nN1ng/VRCX-Candy/releases/latest)**
 
-# Getting Started
-
-<div align="center">
-
-Download and install the latest installer (`VRCX_Setup.exe`) from [here](https://github.com/vrcx-team/VRCX/releases/latest).
-
-For macOS and Linux check [here](https://github.com/vrcx-team/VRCX/wiki/Running-VRCX-on-Linux) for more info.
-
-Beta/nightly build available [here](https://vrcx.app/github/nightly) or in-app `Settings -> General -> Change build`.
-
-# Features
-
-<div align="left">
-
-- :family: Friend, world, and avatar list management
-  - Manage your friends list, world/group/avatar lists outside of VRChat.
-  - Monitor the activity of your friends and track their online status, locations, and avatars.
-  - Track friendship history including add dates, time spent together, and name changes.
-  - Save notes and memos to help remember how you met.
-- :bar_chart: Customizable Dashboard with widgets
-  - Build personalized multi-panel layouts with Feed, GameLog, and Instance widgets.
-  - Create multiple dashboards, each with configurable event filters and column visibility.
-- :mag: Powerful search across all entities
-  - Search for users, worlds, avatars, and groups, or paste IDs and URLs for direct access.
-  - Quick Search provides instant client-side fuzzy search across your friends, avatars, worlds, and groups.
-- :chart_with_upwards_trend: Activity Heatmap
-  - Visualize a user's online activity patterns with a day-of-week × hour-of-day heatmap, including peak stats.
-- :camera: Store world data in the pictures you take in-game, so you can remember that one world you took those cool pictures in like... 6 months ago!
-- :bell: Monitor/respond to notifications
-  - You can send/receive invites and friend requests from VRCX as well as see the instance info of invites that you receive.
-- :scroll: See stats/players for your current instance
-- :tv: See the links to videos that are playing in the world you're in, as well as various other logged data.
-- :performing_arts: Social Status Presets
-  - Save and quickly apply status + status description combinations from the sidebar or user dialog.
-- :rotating_light: VRChat Server Status
-  - A status bar indicator and login page alert inform you of VRChat server issues and outages in real time.
-- :bar_chart: Improved Discord Rich Presence
-  - Display detailed instance information in Discord, including world thumbnail, name, player count, and a join button for public lobbies.
-- :crystal_ball: VR Overlay with configurable live feed of all supported events/notifications
-- :outbox_tray: Upload and manage avatar/world images and details without Unity
-- :electric_plug: Automatically launch apps when you start VRChat
-- :skull: Automatically restart and join last instance when VRC crashes
-- :left_right_arrow: Export/import data
-  - Export friends list, avatar list, Discord names, notes, and favorite groups. Import favorite groups and group moderation bans.
-
-## Miscellaneous
-
-- Want a new look for VRCX? Check out [Themes](https://github.com/vrcx-team/VRCX/wiki/Themes)
-- See [Building from source](https://github.com/vrcx-team/VRCX/wiki/Building-from-source) for instructions on how to build VRCX from source.
-- For a guide on how to run VRCX on Linux, see [here](https://github.com/vrcx-team/VRCX/wiki/Running-VRCX-on-Linux)
-- Interested in contributing? See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for guidelines.
-
-# Screenshots
-
-<div align="center">
-
-<h3>Login</h3>
-
-<table>
-  <tr>
-    <td align="center"><img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251994190-5e6a961e-b2fe-4d3b-bf66-455d8626b8bf.png" alt="login"></td>
-    <td align="center"><img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251994414-a21faf59-6199-45de-94e7-a093a6b8c0ac.png" alt="2fa"></td>
-  </tr>
-</table>
-
-<h3>Feed</h3>
-
-<img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251987020-9839a2c9-47db-4271-b1bf-8e07669a7056.png" alt="feed">
-
-<h3>GameLog</h3>
-
-<img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251987498-b82266ed-131d-42ad-be2f-b167f24acf9f.png" alt="gamelog">
-
-<h3>UserInfo</h3>
-
-<h4>Me</h4>
-
-<img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251990237-0c863d27-141c-4447-82de-4279ab8973ea.png" alt="me">
-
-<h4>Friend</h4>
-
-<img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251989666-8f918786-e632-451d-be29-f92d2c681b80.png" alt="friend">
-
-<h3>World</h3>
-
-<table>
-  <tr>
-    <td align="center"><img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251991003-37a986bb-470c-442b-8ada-31918f7b2017.png" alt="instance"></td>
-    <td align="center"><img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251991217-0d40846f-ac08-48c0-8e4d-18c35fe0999b.png" alt="info"></td>
-  </tr>
-</table>
-
-<h3>Favorite</h3>
-
-<h4>Friend</h4>
-
-<img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251992424-ba406d0f-787e-4e2d-89bd-4caa0a05d31f.png" alt="friend">
-
-<h4>World</h4>
-
-<img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251992950-8f2c6cdc-dc9a-4a60-b59f-9fa80d071359.png" alt="world">
-
-<h4>Avatar</h4>
-
-<img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251993408-66d11100-15a8-484f-b9fd-82be1516c9be.png" alt="avatar">
-
-<h3>Friend Log</h3>
-
-<img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251993741-e2033095-4ceb-4552-8b79-9285325c1e49.png" alt="friendlog">
-
-<h3>Discord Rich Presence</h3>
-
-<img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251997318-5a71249c-59fc-4ad6-9194-d6b1d4165600.png" alt="discord">
-
-<!-- The other images will be similar to this -->
 </div>
-
-## Is VRCX against VRChat's TOS?
-
-**No.**
-
-VRCX is an external tool that uses the VRChat API to provide the features it does.
-
-It does not modify the game in any way, only using the API responsibly to provide the features it does. It is not a mod, or a cheat, or any other form of modification to the game.
-
-To see VRChat's stance on API usage, see the #faq channel in the VRChat Discord.
 
 ---
 
-VRCX is not endorsed by VRChat and does not reflect the views or opinions of VRChat or anyone officially involved in producing or managing VRChat properties. VRChat and all associated properties are trademarks or registered trademarks of VRChat Inc. VRChat © VRChat Inc.
+## 下载哪个
+
+| 文件 | 说明 |
+| --- | --- |
+| **VRCX-Candy-Setup.exe** | 安装版。双击安装，开始菜单和桌面会有快捷方式，以后在「添加或删除程序」里卸载。推荐给不常折腾的人。 |
+| **VRCX-Candy-\*-portable.zip** | 便携版。解压到任意位置，双击里面的 `VRCX-Candy.exe` 就能用，不用安装。 |
+
+两个是同一个程序，**选一个就行，别两个都装**。
+
+第一次打开会被 Windows 拦一下（这个程序没买数字签名）：在蓝色的「Windows 已保护你的电脑」上点 **「更多信息」→「仍要运行」**。装了 360、火绒之类也可能提示，同样放行即可。
+
+## 你的账号和数据
+
+和原版 VRCX 共用同一个数据文件夹：`%APPDATA%\VRCX`。
+
+以前用过 VRCX 的话，打开这个改版时账号、好友、聊天记录、设置全都还在，不用重新登录，也不用重新设置。
+
+> **不要和原版 VRCX 同时开着。** 两个版本读写的是同一个数据库文件，同时开着有写坏的风险。想换回原版就先关掉这个。开着原版时启动 Candy 会弹提示拦住你，但反过来挡不住，得自己注意。
+
+## 这个改版加了什么
+
+改版自己的功能都收在导航栏最上面的 **Candy** 分组里。左上角「VRCX-Candy」旁边有个问号按钮，点它可以随时看一遍这份清单。
+
+- :memo: **玩家简介历史** —— 好友改个人简介会被记录下来，能回看之前写的是什么，还能新旧两版并排对比。
+
+  <img src="https://github.com/user-attachments/assets/970b2641-01c9-46b7-963a-6644f76335d0" width="720" alt="玩家简介历史">
+
+- :footprints: **好友足迹** —— 看某位好友去过哪：最常去的地图、平时什么时段在线、按天排列的行程时间线。
+
+  <img src="https://github.com/user-attachments/assets/2c6ba416-eb67-491c-8ea7-5f606b2ae533" width="720" alt="好友足迹">
+
+- :traffic_light: **好友状态灯历史** —— 看好友在四种状态灯上各花了多少时间，以及精确到分钟的「什么时候是什么灯」。只统计真正在线的时间，人不在游戏里时改的灯不算。
+
+  <img src="https://github.com/user-attachments/assets/4be4b7c8-6fe9-4a57-b7e4-c0a45004f976" width="720" alt="好友状态灯历史">
+
+- :people_holding_hands: **好友同游** —— 记录你不在场时，好友们凑在一起去了哪些地图，错过的部分也能补看。
+
+  <img src="https://github.com/user-attachments/assets/18c348d2-ac05-426c-9895-f7c501cf1618" width="420" alt="好友同游">
+
+- :rotating_light: **状态自动更换** —— 配规则让 VRCX 自己换状态灯和状态签名：
+
+  - 和指定好友在同一个房间（或同一个地图）时，自动换成指定的灯，并换上这条规则自己的签名；
+  - 进入指定地图时，自动换成指定的灯和签名；
+  - 几条规则同时命中时，按 **红灯 > 黄灯 > 绿灯 > 蓝灯** 换优先级最高的那条及其签名。红灯的目的是不被打扰，所以它最大；
+  - 离开那个房间、离开那位好友、或者关掉游戏之后，会自动换回你原来的状态。默认只撤销本功能自己改的部分，你手动设的状态不会被动。
+
+  原版那个「有人 / 独处时自动换状态」没有删掉，它现在只是参与同一次比较的另一个候选，默认不会盖过你写的规则。
+
+- :frame_with_picture: **自定义壁纸** —— 把你自己的一张图铺在界面后面，亮度、模糊、裁剪都能调。在「设置 → 界面」里。
+
+  <img src="https://github.com/user-attachments/assets/de367599-5ac6-4bde-bf80-0517f4c6f2af" width="720" alt="自定义壁纸">
+
+- :battery: **节能** —— 窗口不在视野内时停止绘制界面。实测省不了内存（静态页面本来就不怎么重绘），只省一点 GPU，所以别指望它解决占用。
+
+## 这个改版不会做什么
+
+- 不读取、不上传你的任何数据。所有功能都只读本地的 VRCX 数据库，不写、不外传。
+- 不会自动加你进任何群组。
+- **自动更新是关掉的**。它能装的只有官方版本，装完这个改版就没了；需要更新时回到 [Releases](https://github.com/W4nN1ng/VRCX-Candy/releases) 页面下载。
+
+## 基于什么做的
+
+[VRCX](https://github.com/vrcx-team/VRCX)（MIT 协议），版权归原作者 pypy 及各位贡献者、以及 vrcx-team 所有。
+
+- 原版 README（完整功能清单、截图、多语言版本、如何从源码构建）保留在 [README/README.upstream.en.md](README/README.upstream.en.md)。
+- 分支模型：`master` 是官方原版的一条线，不动，作为 rebase 基线；**`my-vrcx` 才是所有改版功能，也是本仓库的默认分支**。
+- 想自己打包：`powershell -ExecutionPolicy Bypass -File candy\build.ps1`，一条命令出前端、宿主、便携 zip 和安装包（需要本机有 .NET SDK 和 NSIS，路径与踩过的坑见 [HANDOFF.md](HANDOFF.md)）。
+
+这不是 VRCX 官方版本，是个人改版，与原项目团队无关。
+
+---
+
+VRCX-Candy is not endorsed by VRChat and does not reflect the views or opinions of VRChat or anyone officially involved in producing or managing VRChat properties. VRChat and all associated properties are trademarks or registered trademarks of VRChat Inc. VRChat © VRChat Inc.

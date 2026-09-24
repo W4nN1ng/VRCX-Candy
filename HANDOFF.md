@@ -221,11 +221,12 @@ powershell -ExecutionPolicy Bypass -File candy\build.ps1
 
 **用户目前没有提出新需求。** 以下是已经跟他确认过、但还没做的可选项，等他决定：
 
-1. **给 `README.md` 加一段改版说明。** 现在仓库首页（默认分支已经是 `my-vrcx`）显示的仍是上游那份 README，写着官方 VRCX 的介绍和徽章，看不出这是个改版。代价：上游偶尔会改 README，以后 rebase 到新版上游时这里可能冲突一次，要手动解。
-2. **改仓库 About 简介 + Topics**（网页操作，用户自己做）。建议写成「VRCX 的改版：好友足迹 / 状态灯历史 / 同游记录 / 自定义壁纸」。
+1. ~~**给 `README.md` 加一段改版说明。**~~ **已做完**：仓库首页现在是 VRCX-Candy 自己的中文说明（下载选择、数据共用、Candy 功能清单带截图、不做的事、上游署名），上游那份原封不动搬到了 `README/README.upstream.en.md`，只在开头加了两行"这是上游文档"的提示，并把 9 个语言链接和 `CONTRIBUTING.md` 的相对路径改到新位置。
+   - **rebase 时会冲突在这里**：上游偶尔会改 `README.md`，而我们这边它已经不存在了（改名 + 内容不同），git 会报 rename/modify。处理办法：冲突时**保留我们的删除**，把上游新 README 的内容覆盖进 `README/README.upstream.en.md`（注意别把开头那两行提示和改过的相对路径丢掉）。
+2. **改仓库 About 简介 + Topics**（网页操作，用户自己做，PAT 没有 Administration 权限所以代办不了）。右上角齿轮 → Description 填：`VRCX 的中文改版：好友足迹 / 状态灯历史 / 同游记录 / 自动换状态 / 自定义壁纸，原版功能一个没删`；Website 填 `https://github.com/W4nN1ng/VRCX-Candy/releases/latest`；Topics 加 `vrchat`, `vrcx`, `vrcx-fork`, `vrchat-tool`。
 3. **`VRCX_group_invite_seen`（旧键）清理**：旧键还留在用户配置里，没人读它，可以不管。
 
-已经做完、不用再做的：仓库改公开 ✅、默认分支改 `my-vrcx` ✅、发布 Release（tag `v2026.09.16-candy1`，附件齐全）✅。
+已经做完、不用再做的：仓库改公开 ✅、默认分支改 `my-vrcx` ✅、发布 Release（candy1、candy2，附件 SHA256 均已核对）✅、仓库首页换成改版自己的说明 ✅。
 
 ### 加新图表页要在 8 个文件里注册
 
