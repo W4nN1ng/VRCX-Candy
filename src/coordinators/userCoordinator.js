@@ -23,6 +23,9 @@ import { AppDebug } from '../services/appConfig';
 import { database } from '../services/database';
 import { patchUserFromEvent } from '../queries';
 import { watchState } from '../services/watchState';
+import { useAutoStatusRulesStore } from '../stores/settings/autoStatusRules';
+import { decideAutoStatus } from '../shared/utils/autoStatusRules';
+import { AUTO_STATUS_MIN_WRITE_GAP_MS } from '../shared/constants/autoStatus';
 import { applyAvatar, showAvatarDialog } from './avatarCoordinator';
 import { applyFavorite } from './favoriteCoordinator';
 import {
@@ -972,20 +975,76 @@ export function addCustomTag(data) {
     sharedFeedStore.addTag(data.UserId, data.TagColour);
 }
 
+/**
+ * What the rule engine needs to know about right now, in plain data.
+ *
+ * Pulled apart from the stores here so the engine itself stays a pure function that
+ * can be tested without a game, an API or a DOM.
+ *
+ * @param {object} locationStore
+ * @param {object} friendStore
+ * @returns {object} The context object autoStatusRules expects
+ */
+function buildAutoStatusContext(locationStore, friendStore) {
+    const occupants = new Map();
+    // The game log yields entries with no id when it only ever saw a display name and
+    // could not resolve it, so a name index is kept alongside: without it a rule about
+    // that person would quietly never fire.
+    const occupantNames = new Map();
+    for (const [userId, ref] of locationStore.lastLocation.playerList) {
+        const displayName = ref?.displayName || '';
+        if (userId) {
+            occupants.set(userId, displayName);
+        }
+        if (displayName) {
+            occupantNames.set(displayName, userId || '');
+        }
+    }
+
+    const friendTags = new Map();
+    for (const [userId, friend] of friendStore.friends) {
+        const tag = friend?.$location?.tag;
+        if (tag) {
+            friendTags.set(userId, tag);
+        }
+    }
+
+    return {
+        myTag: locationStore.lastLocation.location,
+        occupants,
+        occupantNames,
+        friendTags
+    };
+}
+
 export function updateAutoStateChange() {
     const userStore = useUserStore();
     const generalSettingsStore = useGeneralSettingsStore();
     const gameStore = useGameStore();
     const locationStore = useLocationStore();
     const favoriteStore = useFavoriteStore();
+    const autoStatusRulesStore = useAutoStatusRulesStore();
 
+    const legacyEnabled = generalSettingsStore.autoStateChangeEnabled;
+    const rulesEnabled = autoStatusRulesStore.rules.some((rule) => rule.enabled);
+    if (!legacyEnabled && !rulesEnabled) {
+        return;
+    }
+
+    const locationTag = locationStore.lastLocation.location;
     if (
-        !generalSettingsStore.autoStateChangeEnabled ||
         !gameStore.isGameRunning ||
-        !locationStore.lastLocation.playerList.size ||
-        locationStore.lastLocation.location === '' ||
-        locationStore.lastLocation.location === 'traveling'
+        locationTag === '' ||
+        // Traveling has no occupants yet, so a rule would read an empty room as
+        // "this person is not here" and switch the status the wrong way.
+        locationTag === 'traveling'
     ) {
+        return;
+    }
+
+    // Only the old alone/company behaviour needs a populated room; a world rule is
+    // about where I am, not who else logged in.
+    if (legacyEnabled && !locationStore.lastLocation.playerList.size) {
         return;
     }
 
@@ -1000,12 +1059,13 @@ export function updateAutoStateChange() {
             instanceType = 'groupPublic';
         }
     }
-    if (
-        generalSettingsStore.autoStateChangeInstanceTypes.length > 0 &&
-        !generalSettingsStore.autoStateChangeInstanceTypes.includes(instanceType)
-    ) {
-        return;
-    }
+    // The instance-type filter belongs to the old setting, so it gates that
+    // candidate only. A rule the person wrote about a specific friend or world is
+    // already specific enough; silently filtering it out here would make a rule look
+    // broken rather than off.
+    const legacyInstanceAllowed =
+        generalSettingsStore.autoStateChangeInstanceTypes.length === 0 ||
+        generalSettingsStore.autoStateChangeInstanceTypes.includes(instanceType);
 
     let withCompany = locationStore.lastLocation.playerList.size > 1;
     if (generalSettingsStore.autoStateChangeNoFriends) {
@@ -1041,27 +1101,65 @@ export function updateAutoStateChange() {
     }
 
     const currentStatus = userStore.currentUser.status;
-    const newStatus = withCompany
-        ? generalSettingsStore.autoStateChangeCompanyStatus
-        : generalSettingsStore.autoStateChangeAloneStatus;
 
-    if (currentStatus === newStatus) {
+    // The old alone/company behaviour is now just one more candidate. It is not
+    // allowed to write on its own any more, because two independent writers on the
+    // same field would flip the status back and forth on every tick against an
+    // endpoint that neither merges nor throttles PUTs.
+    let legacy = null;
+    if (legacyEnabled && legacyInstanceAllowed) {
+        const fromCompany = withCompany && generalSettingsStore.autoStateChangeCompanyDescEnabled;
+        const fromAlone = !withCompany && generalSettingsStore.autoStateChangeAloneDescEnabled;
+        legacy = {
+            status: withCompany
+                ? generalSettingsStore.autoStateChangeCompanyStatus
+                : generalSettingsStore.autoStateChangeAloneStatus,
+            description: fromCompany
+                ? generalSettingsStore.autoStateChangeCompanyDesc
+                : fromAlone
+                  ? generalSettingsStore.autoStateChangeAloneDesc
+                  : ''
+        };
+    }
+
+    const decision = decideAutoStatus({
+        rules: autoStatusRulesStore.rules,
+        context: buildAutoStatusContext(locationStore, friendStore),
+        legacy,
+        blendLegacy: generalSettingsStore.autoStateChangeRulesBlendLegacy
+    });
+
+    if (!decision || decision.status === currentStatus) {
         return;
     }
 
-    const params = { status: newStatus };
-    if (withCompany && generalSettingsStore.autoStateChangeCompanyDescEnabled) {
-        params.statusDescription = generalSettingsStore.autoStateChangeCompanyDesc;
-    } else if (!withCompany && generalSettingsStore.autoStateChangeAloneDescEnabled) {
-        params.statusDescription = generalSettingsStore.autoStateChangeAloneDesc;
+    if (!autoStatusRulesStore.claimWrite(AUTO_STATUS_MIN_WRITE_GAP_MS)) {
+        return;
     }
 
-    userRequest.saveCurrentUser(params).then(() => {
-        const text = `Status automatically changed to ${newStatus}`;
-        if (AppDebug.errorNoty) {
-            toast.dismiss(AppDebug.errorNoty);
-        }
-        AppDebug.errorNoty = toast.info(text);
-        console.log(text);
-    });
+    const params = { status: decision.status };
+    // Left out entirely when a rule has no signature of its own, so changing the light
+    // never wipes a description the person typed by hand.
+    if (decision.description) {
+        params.statusDescription = decision.description;
+    }
+
+    const label = decision.source === 'rule' && decision.label ? ` (${decision.label})` : '';
+    userRequest
+        .saveCurrentUser(params)
+        .then(() => {
+            autoStatusRulesStore.releaseWrite(true);
+            const text = `Status automatically changed to ${decision.status}${label}`;
+            if (AppDebug.errorNoty) {
+                toast.dismiss(AppDebug.errorNoty);
+            }
+            AppDebug.errorNoty = toast.info(text);
+            console.log(text);
+        })
+        .catch((error) => {
+            // The old path had no catch at all, so a rejected write became an
+            // unhandled rejection and the engine never learned it had failed.
+            autoStatusRulesStore.releaseWrite(false);
+            console.error('Failed to apply automatic status change', error);
+        });
 }

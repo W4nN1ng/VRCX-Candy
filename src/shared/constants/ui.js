@@ -128,6 +128,13 @@ const navDefinitions = [
         routeName: 'charts-friend-status-lights'
     },
     {
+        key: 'candy-auto-status',
+        icon: 'ri-user-settings-line',
+        tooltip: 'view.candy.auto_status.tab_label',
+        labelKey: 'view.candy.auto_status.tab_label',
+        routeName: 'candy-auto-status'
+    },
+    {
         key: 'charts-friend-together',
         icon: 'ri-group-line',
         tooltip: 'view.charts.friend_together.tab_label',

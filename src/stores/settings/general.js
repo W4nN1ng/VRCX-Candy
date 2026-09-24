@@ -35,6 +35,10 @@ export const useGeneralSettingsStore = defineStore('GeneralSettings', () => {
     const autoStateChangeCompanyStatus = ref('busy');
     const autoStateChangeInstanceTypes = ref([]);
     const autoStateChangeNoFriends = ref(false);
+    // Off by default: a rule the person wrote about a specific friend or world is the more
+    // specific instruction, so it wins unless they ask for the two to be compared
+    // against each other by light priority instead.
+    const autoStateChangeRulesBlendLegacy = ref(false);
     const autoStateChangeAloneDescEnabled = ref(false);
     const autoStateChangeAloneDesc = ref('');
     const autoStateChangeCompanyDescEnabled = ref(false);
@@ -65,6 +69,7 @@ export const useGeneralSettingsStore = defineStore('GeneralSettings', () => {
             autoStateChangeCompanyStatusConfig,
             autoStateChangeInstanceTypesStrConfig,
             autoStateChangeNoFriendsConfig,
+            autoStateChangeRulesBlendLegacyConfig,
             autoStateChangeAloneDescEnabledConfig,
             autoStateChangeAloneDescConfig,
             autoStateChangeCompanyDescEnabledConfig,
@@ -93,6 +98,7 @@ export const useGeneralSettingsStore = defineStore('GeneralSettings', () => {
             configRepository.getString('VRCX_autoStateChangeCompanyStatus', 'busy'),
             configRepository.getString('VRCX_autoStateChangeInstanceTypes', '[]'),
             configRepository.getBool('VRCX_autoStateChangeNoFriends', false),
+            configRepository.getBool('VRCX_autoStateChangeRulesBlendLegacy', false),
             configRepository.getBool('VRCX_autoStateChangeAloneDescEnabled', false),
             configRepository.getString('VRCX_autoStateChangeAloneDesc', ''),
             configRepository.getBool('VRCX_autoStateChangeCompanyDescEnabled', false),
@@ -131,6 +137,7 @@ export const useGeneralSettingsStore = defineStore('GeneralSettings', () => {
         autoStateChangeCompanyStatus.value = autoStateChangeCompanyStatusConfig;
         autoStateChangeInstanceTypes.value = JSON.parse(autoStateChangeInstanceTypesStrConfig);
         autoStateChangeNoFriends.value = autoStateChangeNoFriendsConfig;
+        autoStateChangeRulesBlendLegacy.value = autoStateChangeRulesBlendLegacyConfig === true;
         autoStateChangeAloneDescEnabled.value = autoStateChangeAloneDescEnabledConfig;
         autoStateChangeAloneDesc.value = autoStateChangeAloneDescConfig;
         autoStateChangeCompanyDescEnabled.value = autoStateChangeCompanyDescEnabledConfig;
@@ -241,6 +248,11 @@ export const useGeneralSettingsStore = defineStore('GeneralSettings', () => {
     function setAutoStateChangeNoFriends() {
         autoStateChangeNoFriends.value = !autoStateChangeNoFriends.value;
         configRepository.setBool('VRCX_autoStateChangeNoFriends', autoStateChangeNoFriends.value);
+    }
+
+    function setAutoStateChangeRulesBlendLegacy() {
+        autoStateChangeRulesBlendLegacy.value = !autoStateChangeRulesBlendLegacy.value;
+        configRepository.setBool('VRCX_autoStateChangeRulesBlendLegacy', autoStateChangeRulesBlendLegacy.value);
     }
     function setAutoStateChangeAloneDescEnabled() {
         autoStateChangeAloneDescEnabled.value = !autoStateChangeAloneDescEnabled.value;
@@ -362,6 +374,7 @@ export const useGeneralSettingsStore = defineStore('GeneralSettings', () => {
         autoStateChangeCompanyStatus,
         autoStateChangeInstanceTypes,
         autoStateChangeNoFriends,
+        autoStateChangeRulesBlendLegacy,
         autoStateChangeAloneDescEnabled,
         autoStateChangeAloneDesc,
         autoStateChangeCompanyDescEnabled,
@@ -389,6 +402,7 @@ export const useGeneralSettingsStore = defineStore('GeneralSettings', () => {
         setAutoStateChangeCompanyStatus,
         setAutoStateChangeInstanceTypes,
         setAutoStateChangeNoFriends,
+        setAutoStateChangeRulesBlendLegacy,
         setAutoStateChangeAloneDescEnabled,
         setAutoStateChangeAloneDesc,
         setAutoStateChangeCompanyDescEnabled,

@@ -127,6 +127,11 @@ const routes = [
                 name: 'charts-friend-together',
                 component: () => import('./../views/Charts/components/FriendTogether.vue')
             },
+            {
+                path: 'candy/auto-status',
+                name: 'candy-auto-status',
+                component: () => import('./../views/Candy/components/AutoStatusRules.vue')
+            },
             { path: 'tools', name: 'tools', component: Tools },
             {
                 path: 'tools/gallery',

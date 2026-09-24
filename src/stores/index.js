@@ -18,6 +18,7 @@ import { useGalleryStore } from './gallery';
 import { useGameLogStore } from './gameLog';
 import { useGameStore } from './game';
 import { useGeneralSettingsStore } from './settings/general';
+import { useAutoStatusRulesStore } from './settings/autoStatusRules';
 import { useQuickSearchStore } from './quickSearch';
 import { useGroupStore } from './group';
 import { useInstanceStore } from './instance';
@@ -125,6 +126,7 @@ export function createGlobalStores() {
         appearanceSettings: useAppearanceSettingsStore(),
         discordPresenceSettings: useDiscordPresenceSettingsStore(),
         generalSettings: useGeneralSettingsStore(),
+        autoStatusRules: useAutoStatusRulesStore(),
         notificationsSettings: useNotificationsSettingsStore(),
         wristOverlaySettings: useWristOverlaySettingsStore(),
         avatarProvider: useAvatarProviderStore(),
@@ -190,6 +192,7 @@ export {
     useAppearanceSettingsStore,
     useDiscordPresenceSettingsStore,
     useGeneralSettingsStore,
+    useAutoStatusRulesStore,
     useNotificationsSettingsStore,
     useWristOverlaySettingsStore,
     useToolsStore,
