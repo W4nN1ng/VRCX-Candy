@@ -13,12 +13,17 @@ const testDefinitions = [
     { key: 'charts-friend-footprints', routeName: 'charts-friend-footprints' },
     { key: 'charts-friend-status-lights', routeName: 'charts-friend-status-lights' },
     { key: 'charts-friend-together', routeName: 'charts-friend-together' },
+    { key: 'candy-auto-status', routeName: 'candy-auto-status' },
     { key: 'notification', routeName: 'notification' },
     { key: 'direct-access', action: 'direct-access' }
 ];
 const testDefinitionMap = new Map(testDefinitions.map((d) => [d.key, d]));
 const mockT = (key) => `translated:${key}`;
 const mockGenerateFolderId = () => 'generated-folder-id';
+
+// The folder also picks up any Candy page the auto-append pass had left loose, so the
+// page-order assertions look at the three this feature moves rather than the whole list.
+const candyPages = (items) => items.filter((key) => key.startsWith('charts-friend-'));
 
 // ─── normalizeHiddenKeys ─────────────────────────────────────────────
 
@@ -165,7 +170,10 @@ describe('sanitizeLayout', () => {
     test('preserves valid item entries', () => {
         const layout = [{ type: 'item', key: 'feed' }];
         const result = runSanitize(layout);
-        expect(result[0]).toEqual({ type: 'item', key: 'feed' });
+        // Not result[0]: the Candy folder is created at the top of a layout that has
+        // never seen it, which is the point of the feature.
+        expect(result[0].id).toBe('default-folder-candy');
+        expect(result.find((e) => e.type === 'item' && e.key === 'feed')).toEqual({ type: 'item', key: 'feed' });
     });
 
     test('skips invalid item keys', () => {
@@ -213,7 +221,7 @@ describe('sanitizeLayout', () => {
             }
         ];
         const result = runSanitize(layout);
-        const folder = result.find((e) => e.type === 'folder');
+        const folder = result.find((e) => e.type === 'folder' && e.id === 'generated-folder-id');
         expect(folder.id).toBe('generated-folder-id');
     });
 
@@ -227,7 +235,7 @@ describe('sanitizeLayout', () => {
             }
         ];
         const result = runSanitize(layout);
-        const folder = result.find((e) => e.type === 'folder');
+        const folder = result.find((e) => e.type === 'folder' && e.id === 'f1');
         expect(folder.name).toBe('translated:nav_tooltip.favorites');
     });
 
@@ -251,14 +259,75 @@ describe('sanitizeLayout', () => {
         const result = runSanitize(layout);
         const chartsFolder = result.find((e) => e.type === 'folder' && e.id === 'default-folder-charts');
         expect(chartsFolder).toBeDefined();
-        expect(chartsFolder.items).toEqual([
-            'charts-instance',
-            'charts-mutual',
-            'charts-hot-worlds',
+        // The three fork-authored pages left this folder for good; a layout saved
+        // before they existed still must not lose them, so they surface under Candy.
+        expect(chartsFolder.items).toEqual(['charts-instance', 'charts-mutual', 'charts-hot-worlds']);
+        const candyFolder = result.find((e) => e.type === 'folder' && e.id === 'default-folder-candy');
+        expect(candyPages(candyFolder.items)).toEqual([
             'charts-friend-footprints',
             'charts-friend-status-lights',
             'charts-friend-together'
         ]);
+    });
+
+    test('lifts candy pages out of a saved charts folder and puts them on top', () => {
+        // This is the case that decides whether an existing install ever sees the
+        // feature: a saved layout replaces the defaults completely.
+        const layout = [
+            { type: 'item', key: 'feed' },
+            {
+                type: 'folder',
+                id: 'default-folder-charts',
+                nameKey: 'nav_tooltip.charts',
+                items: [
+                    'charts-instance',
+                    'charts-friend-footprints',
+                    'charts-mutual',
+                    'charts-friend-status-lights',
+                    'charts-hot-worlds',
+                    'charts-friend-together'
+                ]
+            }
+        ];
+        const result = runSanitize(layout);
+        expect(result[0].id).toBe('default-folder-candy');
+        const chartsFolder = result.find((e) => e.type === 'folder' && e.id === 'default-folder-charts');
+        expect(chartsFolder.items).toEqual(['charts-instance', 'charts-mutual', 'charts-hot-worlds']);
+        expect(candyPages(result[0].items)).toEqual([
+            'charts-friend-footprints',
+            'charts-friend-status-lights',
+            'charts-friend-together'
+        ]);
+    });
+
+    test('keeps a Candy folder where the person put it', () => {
+        const layout = [
+            { type: 'item', key: 'feed' },
+            {
+                type: 'folder',
+                id: 'default-folder-candy',
+                nameKey: 'nav_tooltip.candy',
+                items: ['charts-friend-together', 'charts-friend-status-lights', 'charts-friend-footprints']
+            },
+            { type: 'item', key: 'tools' }
+        ];
+        const result = runSanitize(layout);
+        // Already present, so it is left alone - and its own order is respected.
+        expect(result[0].key).toBe('feed');
+        expect(result[1].id).toBe('default-folder-candy');
+        // the person's own order survives
+        expect(candyPages(result[1].items)).toEqual([
+            'charts-friend-together',
+            'charts-friend-status-lights',
+            'charts-friend-footprints'
+        ]);
+    });
+
+    test('does not resurrect a hidden candy page', () => {
+        const layout = [{ type: 'item', key: 'feed' }];
+        const result = runSanitize(layout, ['charts-friend-together']);
+        const candyFolder = result.find((e) => e.type === 'folder' && e.id === 'default-folder-candy');
+        expect(candyPages(candyFolder.items)).toEqual(['charts-friend-footprints', 'charts-friend-status-lights']);
     });
 
     test('auto-appends charts folder when charts keys are neither used nor hidden', () => {

@@ -1,5 +1,108 @@
 const DEFAULT_FOLDER_ICON = 'ri-folder-line';
 
+// Everything this fork added to the Charts section, lifted into its own folder that
+// sits at the very top of the menu. The keys keep their `charts-` prefix on purpose:
+// renaming them would orphan the copies already saved in people's custom layouts,
+// and the gate below would then drop the entire Charts folder.
+const CANDY_FOLDER_ID = 'default-folder-candy';
+const CANDY_KEYS = [
+    'candy-auto-status',
+    'charts-friend-footprints',
+    'charts-friend-status-lights',
+    'charts-friend-together'
+];
+const CHARTS_KEYS = ['charts-instance', 'charts-mutual', 'charts-hot-worlds'];
+
+/**
+ * Move the Candy pages into a single folder at the top of the menu.
+ *
+ * This runs as a pass over an already normalized layout rather than as a case inside
+ * each branch, because a Candy key can arrive from four different places: the saved
+ * layout's own Charts folder, a person's hand made folder, a leftover standalone item,
+ * or the auto-append of definitions nobody has placed yet. Handling them in one place
+ * is what makes the folder appear for people who already have a custom layout saved -
+ * and a saved layout replaces the defaults completely, so without this the folder
+ * would only ever show up for a fresh install.
+ *
+ * @param {Array} normalized - Layout to rewrite in place
+ * @param {Map} definitionMap - Map of valid nav definition keys
+ * @param {Set} hiddenSet - Keys the person has hidden
+ * @param {Function} t - I18n translation function
+ */
+function relocateCandyEntries(normalized, definitionMap, hiddenSet, t) {
+    const available = CANDY_KEYS.filter((key) => definitionMap.has(key) && !hiddenSet.has(key));
+    if (!available.length) {
+        return;
+    }
+
+    // Whatever order the person had, keep it; a folder that already exists wins
+    // over the standalone items that might also name the same pages.
+    const ordered = [];
+    const keep = (key) => {
+        if (available.includes(key) && !ordered.includes(key)) {
+            ordered.push(key);
+        }
+    };
+
+    // An existing folder is rewritten where it stands. Only a layout that has never
+    // seen Candy gets it forced to the top - otherwise a person who deliberately
+    // dragged it somewhere else would have it snap back on every load.
+    const existing = normalized.find((e) => e.type === 'folder' && e.id === CANDY_FOLDER_ID) || null;
+    if (existing && Array.isArray(existing.items)) {
+        existing.items.forEach(keep);
+    }
+
+    for (const entry of normalized) {
+        if (entry === existing || entry.type !== 'folder' || !Array.isArray(entry.items)) {
+            continue;
+        }
+        entry.items = entry.items.filter((key) => {
+            if (!CANDY_KEYS.includes(key)) {
+                return true;
+            }
+            keep(key);
+            return false;
+        });
+    }
+
+    // Two passes on purpose. The order the pages end up in comes from a forward walk;
+    // the removal has to go backwards or the indices shift under the splice.
+    normalized.forEach((entry) => {
+        if (entry.type === 'item' && CANDY_KEYS.includes(entry.key)) {
+            keep(entry.key);
+        }
+    });
+
+    for (let i = normalized.length - 1; i >= 0; i--) {
+        const entry = normalized[i];
+        if (entry.type === 'item' && CANDY_KEYS.includes(entry.key)) {
+            normalized.splice(i, 1);
+            continue;
+        }
+        if (entry.type === 'folder' && entry !== existing && Array.isArray(entry.items) && entry.items.length === 0) {
+            normalized.splice(i, 1);
+        }
+    }
+
+    if (!ordered.length) {
+        return;
+    }
+
+    if (existing) {
+        existing.items = ordered;
+        return;
+    }
+
+    normalized.unshift({
+        type: 'folder',
+        id: CANDY_FOLDER_ID,
+        nameKey: 'nav_tooltip.candy',
+        name: t('nav_tooltip.candy'),
+        icon: 'ri-cake-2-line',
+        items: ordered
+    });
+}
+
 /**
  * Deduplicate and validate hidden navigation keys against the definition map.
  *
@@ -39,14 +142,7 @@ export function sanitizeLayout(layout, hiddenKeys, definitionMap, allDefinitions
     const normalizedHiddenKeys = normalizeHiddenKeys(hiddenKeys, definitionMap);
     const hiddenSet = new Set(normalizedHiddenKeys);
     const normalized = [];
-    const chartsKeys = [
-        'charts-instance',
-        'charts-mutual',
-        'charts-hot-worlds',
-        'charts-friend-footprints',
-        'charts-friend-status-lights',
-        'charts-friend-together'
-    ];
+    const chartsKeys = CHARTS_KEYS;
 
     const appendItemEntry = (key, target = normalized) => {
         if (!key || usedKeys.has(key) || !definitionMap.has(key)) {
@@ -130,6 +226,9 @@ export function sanitizeLayout(layout, hiddenKeys, definitionMap, allDefinitions
     if (!chartsKeys.some((key) => usedKeys.has(key)) && !chartsKeys.some((key) => hiddenSet.has(key))) {
         appendChartsFolder();
     }
+
+    // Before the direct-access fixup, so the pinned-to-the-bottom entry stays pinned.
+    relocateCandyEntries(normalized, definitionMap, hiddenSet, t);
 
     // Ensure direct-access is always the last item
     const directAccessIdx = normalized.findIndex((entry) => entry.type === 'item' && entry.key === 'direct-access');

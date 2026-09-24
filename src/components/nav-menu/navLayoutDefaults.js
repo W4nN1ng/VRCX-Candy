@@ -2,6 +2,22 @@ import { DASHBOARD_NAV_KEY_PREFIX } from '../../shared/constants';
 
 export function createBaseDefaultNavLayout(t) {
     return [
+        // First on purpose: this is where everything this fork added lives, and it
+        // has to be the first thing a person sees rather than something they dig out
+        // of the upstream Charts folder.
+        {
+            type: 'folder',
+            id: 'default-folder-candy',
+            nameKey: 'nav_tooltip.candy',
+            name: t('nav_tooltip.candy'),
+            icon: 'ri-cake-2-line',
+            items: [
+                'candy-auto-status',
+                'charts-friend-footprints',
+                'charts-friend-status-lights',
+                'charts-friend-together'
+            ]
+        },
         { type: 'item', key: 'feed' },
         { type: 'item', key: 'friends-locations' },
         { type: 'item', key: 'game-log' },
@@ -31,14 +47,7 @@ export function createBaseDefaultNavLayout(t) {
             nameKey: 'nav_tooltip.charts',
             name: t('nav_tooltip.charts'),
             icon: 'ri-pie-chart-line',
-            items: [
-                'charts-instance',
-                'charts-mutual',
-                'charts-hot-worlds',
-                'charts-friend-footprints',
-                'charts-friend-status-lights',
-                'charts-friend-together'
-            ]
+            items: ['charts-instance', 'charts-mutual', 'charts-hot-worlds']
         },
         { type: 'item', key: 'tools' },
         { type: 'item', key: 'direct-access' }

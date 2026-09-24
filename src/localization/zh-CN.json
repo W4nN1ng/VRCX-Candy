@@ -73,6 +73,7 @@
         "notification": "通知",
         "friend_list": "好友列表",
         "charts": "图表",
+        "candy": "Candy",
         "tools": "工具",
         "settings": "设置",
         "manage": "管理",
@@ -235,6 +236,15 @@
         }
     },
     "view": {
+        "candy": {
+            "auto_status": {
+                "tab_label": "状态自动更换",
+                "intro": "满足下面任一条件时，VRCX 自动帮你换状态灯，也可以连签名一起换。",
+                "legacy_title": "旧版规则：有人时 / 独处时",
+                "legacy_hint": "上面的规则一条都没命中时，才轮到它生效。那部分设置仍在原来的弹窗里。",
+                "legacy_open": "打开旧版设置"
+            }
+        },
         "login": {
             "savedAccounts": "已保存的账号",
             "login": "登录",
@@ -1565,6 +1575,23 @@
         }
     },
     "dialog": {
+        "auto_status_rules": {
+            "title": "按好友 / 按地图自动更换",
+            "priority_hint": "多条规则同时命中时，按状态灯的强度取胜，顺序是：",
+            "priority_hint_tail": "红灯排在最上是刻意的——红灯的意义就是不想被人找到，所以任何蓝灯规则都盖不过红灯。同为一种灯时，按列表从上往下取。没填签名的规则只换灯，不动你现在的签名。",
+            "presence_hint": "VRCX 只能从游戏日志里知道房间里有谁，所以好友规则要求游戏在运行、且日志记录开启。「同地图任意实例」只对好友有效——陌生人不会把位置告诉我们。",
+            "empty": "还没有规则。",
+            "type_friend": "和好友一起",
+            "type_world": "进入地图",
+            "pick_target": "选择…",
+            "signature_placeholder": "签名（留空则不改签名）",
+            "with_signature": "同时更换签名",
+            "pin": "强制生效（忽略优先级）",
+            "same_world": "同一地图，不限实例",
+            "add": "添加规则",
+            "blend_legacy": "让旧的「有人/独处」规则也参与优先级比较",
+            "blend_legacy_hint": "关闭（默认）：这里写的规则优先于旧的「有人时/独处时」设置。打开：旧设置一起参加比较，所以旧的红灯会盖过新的绿灯。"
+        },
         "alertdialog": {
             "ok": "确定",
             "cancel": "取消",

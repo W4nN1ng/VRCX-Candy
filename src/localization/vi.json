@@ -2,6 +2,7 @@
     "language": "Tiếng Việt (vi)",
     "translator": "MenacingExiler",
     "nav_tooltip": {
+        "candy": "Candy",
         "feed": "Feed",
         "game_log": "Game Log",
         "player_list": "Danh sách người chơi",
@@ -29,6 +30,15 @@
         "pending_offline": "Đang chờ Offline"
     },
     "view": {
+        "candy": {
+            "auto_status": {
+                "tab_label": "Auto status",
+                "intro": "When a condition below is met, VRCX switches your status light - and optionally your signature - for you.",
+                "legacy_title": "Older rule: when I am with someone / alone",
+                "legacy_hint": "These only apply when none of the rules above match. Their settings still live in the original dialog.",
+                "legacy_open": "Open the older settings"
+            }
+        },
         "login": {
             "savedAccounts": "Tài khoản đã lưu",
             "login": "Đăng nhập",
@@ -653,6 +663,23 @@
         }
     },
     "dialog": {
+        "auto_status_rules": {
+            "title": "Rules by friend or world",
+            "priority_hint": "When several rules match at the same moment, the stronger light wins, in this order:",
+            "priority_hint_tail": "Red is on top on purpose - its whole point is not to be found, so a red rule can never be overridden by a blue one. Rules of the same light are tried top to bottom. A rule with no signature leaves your current one untouched.",
+            "presence_hint": "VRCX only learns who is in your room from the game log, so a friend rule needs the game running and VRCX logging. \"Same world, any instance\" works for friends only - a stranger never reports their location to us.",
+            "empty": "No rules yet.",
+            "type_friend": "With friend",
+            "type_world": "In world",
+            "pick_target": "Choose...",
+            "signature_placeholder": "Signature (leave empty to keep it)",
+            "with_signature": "Also change signature",
+            "pin": "Force (ignores priority)",
+            "same_world": "Same world, any instance",
+            "add": "Add rule",
+            "blend_legacy": "Compare the old alone/busy rule by light priority too",
+            "blend_legacy_hint": "Off (default): a rule you wrote here wins over the old \"when I am alone / with company\" setting. On: the old setting joins the same contest, so a red old rule beats a green new one."
+        },
         "user": {
             "status": {
                 "active": "Active",
