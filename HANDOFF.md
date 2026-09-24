@@ -8,9 +8,9 @@
 
 ## 0. 一句话现状
 
-**VRCX-Candy 已经是一个能独立安装运行的程序**（不是"往原版里塞界面文件"那种改法了），源码公开在 GitHub，最新版已作为 Release 发布。用户手上还有一个能用的原版改版部署方式（换 `E:\VRCX\html`）。
+**VRCX-Candy 已经是一个能独立安装运行的程序**（不是"往原版里塞界面文件"那种改法了），源码公开在 GitHub，最新版已作为 Release 发布。用户日常跑的是**安装版 `E:\VRCX-Candy`**，改版部署方式是换 `E:\VRCX\html`（旧路，仍在机器上）。
 
-**下一个任务：等用户提。** 目前没有未完成的需求。
+**内存/显存优化这条线用户已经明确废止**（α 分支、探针沙箱、测量脚本全部删除，别再去做）。**下一个任务：等用户提。**
 
 ---
 
@@ -20,8 +20,9 @@
 | --- | --- |
 | 代码仓库 | `C:\Users\28041\vrcx-fork`（git，当前分支 `my-vrcx`） |
 | 上游官方 | https://github.com/vrcx-team/VRCX —— remote `upstream`（ghfast.top 镜像）、`upstream_github`（直连） |
-| **用户的 GitHub（已公开）** | https://github.com/W4nN1ng/VRCX-sweetCandy —— remote `origin`，SSH 别名 `github.com-vrcx`，密钥 `~/.ssh/id_ed25519_github_vrcx` |
-| **发行版（下载页）** | https://github.com/W4nN1ng/VRCX-sweetCandy/releases/latest |
+| **用户的 GitHub（已公开）** | https://github.com/W4nN1ng/VRCX-Candy —— remote `origin`，SSH 别名 `github.com-vrcx`，密钥 `~/.ssh/id_ed25519_github_vrcx`。**仓库原名 `VRCX-sweetCandy`，已改名**；旧地址 GitHub 暂时重定向，本地 remote 已同步为新地址 |
+| **发行版（下载页）** | https://github.com/W4nN1ng/VRCX-Candy/releases/latest |
+| **用户实际在跑的程序** | `E:\VRCX-Candy\VRCX-Candy.exe`（安装版）。改前端后要部署到这里才能被看到：`npx vite build src` → 把 `build\html\*` 覆盖进 `E:\VRCX-Candy\html`，然后重启。首次覆盖前的原件备份在 `E:\VRCX-Candy\html.bak-20260924-205802` |
 | 部署目标（旧方式） | `E:\VRCX\html` —— 原版 CefSharp 宿主 + 我们的前端，换掉 html 即生效 |
 | 维护脚本 | `C:\Users\28041\vrcx-mod`（`sync` / `update` / `check-update` / `rollback` / `push`，各配 `.cmd` 入口；`config.ps1` 集中配置） |
 | 用户数据 | `C:\Users\28041\AppData\Roaming\VRCX\VRCX.sqlite3`（**只读，任何脚本都不要写它**） |
@@ -64,6 +65,10 @@
 | `de5a3650` | 命名 + 帮助屏 + 新图标 | 侧边栏顶部「VRCX-Candy」+ 问号按钮；`WhatThisBuildAddsDialog.vue`；14 个语言文件 |
 | `f1d6ea27` | 独立程序 | `Dotnet/*` 改名 + `candy/` 打包脚本 + 关掉自动更新 |
 | `24dbdaad` + `9cb758b4` | 节能模式（实测收益见下） | `MainForm` 在窗口不可见时 `WasHidden(true)`；`CefService` 关掉后台定时器节流；状态栏迷你图不再每秒重建画布 |
+| `f3a82dee` | Candy 分组置顶 | 好友足迹/状态灯/同游从官方「图表」里拆出来单独成组。**导航布局一旦自定义过就整份存库并完全取代默认值**，所以必须靠 `sanitizeLayout` 末尾的后置搬迁，改 `navLayoutDefaults` 对老用户无效 |
+| `be093ba3` + `9347b880` | 状态自动更换（按好友 / 按地图） | `shared/utils/autoStatusRules.js` 纯函数 + 28 单测；**没有新增第二个状态写入者**，见第 5 节 |
+| `028c1ec6` | 壁纸下开关滑块消失 | `.bg-background` 通用类误伤滑块，见第 5 节 |
+| `7c3d32e4` | 足迹/状态灯头像不显示 | 时机问题不是字段问题，见第 5 节 |
 
 ### 节能模式的实测结论（重要，别重复踩）
 
@@ -124,6 +129,21 @@
 - PowerShell 里函数名不能叫 `Git`（和 `git` 命令大小写不敏感冲突，会无限递归）；git 往 stderr 写的正常提示会被 `$ErrorActionPreference='Stop'` 当异常，helper 里要临时降级。
 - **Git Bash 会把 `/V4` 这类参数当成路径**（`C:/Program Files/Git/V4`）。调 NSIS 加详细输出时要用 `MSYS_NO_PATHCONV=1`。
 - **`grep` 关键词要挑准**：验证产物里有没有某段代码时，别用 `grep -c "forced"` 这种词（CSS 的 `forced-colors` 会误命中）。用日志模板这种唯一字符串。
+
+### 2026-09-24 这一轮新踩的坑（都付出了代价，务必先看）
+
+- **`npm run lint` 抓不到未声明变量。** oxlint 默认**不启用 `no-undef`**，所以"lint 0 错误"对这类 bug 完全无效。写 coordinator / store 这种接线代码时，额外跑一次 `npx oxlint -D no-undef <改过的文件>`。本次实例：`updateAutoStateChange` 里引用了没声明的 `friendStore`，构建通过、lint 通过、28 个单测全通过，**运行时每 3 秒抛 `ReferenceError`，功能静默失效**——是用户报告"没自动换状态"后翻 `%APPDATA%\VRCX\logs\VRCX*.log` 才看到的。全仓库跑这条规则会有 32 个误报（`document` 等浏览器全局没配 globals），所以只对改动文件跑。
+- **改完前端一定要看运行日志**：`cd %APPDATA%\VRCX\logs`，取最新那个 `VRCX*.log` 看尾巴。`VRCX.MainForm - ReferenceError ...` 这种行就是前端在抛异常。
+- **状态字段只能有一个写入者。** `updateAutoStateChange`（`userCoordinator.js`）由 `updateLoop` 每 3 秒调用一次，已经在写 `status` + `statusDescription`。而 `userRequest.saveCurrentUser` 是 PUT，`services/request.js` 的去重/合并和 429 处理**只管 GET 和 `/instances/groups`**，完全不限流。再加一个独立引擎 = 两个写入者每隔几秒互相改回来，并拿用户账号无限打接口。做法：所有候选（新规则 + 旧的有人/独处）交给 `decideAutoStatus` 一次裁决，只发一次请求，并带在途标志与最小写入间隔。
+- **导航布局：存档完全覆盖默认值。** 键 `VRCX_customNavMenuLayoutList`（存成 `config:vrcx_customnavmenulayoutlist`）。只要用户自定义过，`loadNavMenuConfig` 就直接用存档、`navLayoutDefaults.js` 整个被跳过。加新分组/新页面必须同时改 `navMenuUtils.js` 的 `sanitizeLayout`（`CANDY_KEYS` + 末尾的 `relocateCandyEntries`），否则老用户永远看不到。
+- **`navMenuUtils.js` 里重复维护着一份图表 key 清单**，和 `ui.js` 不一致会触发 `every(key => definitionMap.has(key))` 判断失败，**整个图表文件夹静默消失**（不是少一项，是全没）。两处必须同步改。
+- **Tailwind v4 的 `dark:` 包在 `:where()` 里，不贡献优先级。** 所以 `html.has-wallpaper .bg-background`（0,2,1）会压过组件自己的 `dark:data-[state=...]:bg-foreground`。壁纸那条规则用的通用工具类 `.bg-background` 因此把**开关滑块**也刷成半透明底色，滑块直接看不见。给通用类写覆盖规则时要按 `data-slot` 排除控件。
+- **VRCX 的好友信息分两批到**：先 id + 名字，完整资料（头像、状态）随后由 `applyUser` 填进 `ctx.ref`。在加载时把 `ref` 拍成快照存进数组，等于永久停在第一批——症状是头像和状态圈同时消失。要**渲染时再查**。
+- **两个布尔标记互相推导会死锁**：签名框 `v-if="descriptionEnabled"` + 清洗逻辑 `descriptionEnabled && text.length > 0`，新规则文字本为空 → 开关一拨就被弹回 → 框永远出不来。只留一个真相来源（标记由文字推导）。
+- **改语言文件别整份 `JSON.parse` + 序列化**（会把几千行无关行的排版重写，diff 爆炸）。逐行文本插入，并且**写完先 `JSON.parse` 校验、失败就不落盘**——这个守卫实际拦住了两次"漏逗号/漏嵌套层"的错误写入。
+- **删 git worktree 前必须先摘 `node_modules` junction**，否则递归删除会顺着链接把主仓库依赖删掉。用 `[IO.Directory]::Delete($path,$false)` 只摘链接，删完核对主仓库条目数。
+- **PowerShell 内联命令里别用 `''` 嵌套单引号**（bash 会先吃掉一层，导致 `-Filter "Name = X.exe"` 变成非法 WQL，而且**整条命令解析失败、前面的语句也不会执行**）。写进 `.ps1` 用 `-File` 跑。
+- **`cmd | head -N` 会因 SIGPIPE 提前掐死循环**（清理旧构建产物时只删了 5 个就停了）。要统计就先写文件再截断显示。
 
 ---
 
@@ -194,9 +214,11 @@ powershell -ExecutionPolicy Bypass -File candy\build.ps1
 
 已经做完、不用再做的：仓库改公开 ✅、默认分支改 `my-vrcx` ✅、发布 Release（tag `v2026.09.16-candy1`，附件齐全）✅。
 
-### 加新图表页要在 7 个文件里注册
+### 加新图表页要在 8 个文件里注册
 
-漏一个就出问题（用 `grep -rn "charts-hot-worlds" src/` 逐条对，最省事）：`plugins/router.js`、`shared/constants/ui.js`、`nav-menu/navLayoutDefaults.js`、`nav-menu/navMenuUtils.js` 的 `chartsKeys`（有 `every(key => definitionMap.has(key))` 的门槛，漏了**整个 charts 文件夹都不显示**）、`shared/constants/dashboard.js`、`stores/settings/appearance.js`、`Dashboard/components/panelRegistry.js`，外加 `nav-menu/__tests__/navMenuUtils.test.js` 里的 fixture 和期望数组。
+漏一个就出问题（用 `grep -rn "charts-hot-worlds" src/` 逐条对，最省事）：`plugins/router.js`、`shared/constants/ui.js`、`nav-menu/navLayoutDefaults.js`、`nav-menu/navMenuUtils.js` 的 `chartsKeys`（有 `every(key => definitionMap.has(key))` 的门槛，漏了**整个 charts 文件夹都不显示**；改版功能现在在 `CANDY_KEYS` 里）、`shared/constants/dashboard.js`、`stores/settings/appearance.js` 的 `isSideBarTabShow`（漏了右侧好友栏不隐藏，整页布局被挤换行）、`Dashboard/components/panelRegistry.js`，外加 `nav-menu/__tests__/navMenuUtils.test.js` 里的 fixture 和期望数组。
+
+**只对老用户生效的额外一步**：新 key 必须出现在 `navMenuUtils.js` 的 `CANDY_KEYS` 里，否则它会被自动补漏逻辑甩到菜单最底部而不是进 Candy 文件夹（存档布局优先于默认值，见第 5 节）。
 
 ### 加新功能的模式
 
