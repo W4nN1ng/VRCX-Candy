@@ -21,16 +21,18 @@
                         class="x-hover-list flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left"
                         :class="candidate.userId === selectedId ? 'bg-accent' : ''"
                         @click="selectFriend(candidate.userId)">
-                        <div class="relative inline-block size-9 flex-none" :class="userStatusClass(candidate.user)">
+                        <div
+                            class="relative inline-block size-9 flex-none"
+                            :class="userStatusClass(candidateUser(candidate))">
                             <Avatar class="size-9">
-                                <AvatarImage :src="userImage(candidate.user, true)" class="object-cover" />
+                                <AvatarImage :src="userImage(candidateUser(candidate), true)" class="object-cover" />
                                 <AvatarFallback><User class="size-4 text-muted-foreground" /></AvatarFallback>
                             </Avatar>
                         </div>
                         <div class="min-w-0 flex-1">
                             <div
                                 class="truncate text-[13px] font-medium"
-                                :style="{ color: candidate.user?.$userColour }">
+                                :style="{ color: candidateUser(candidate)?.$userColour }">
                                 {{ candidate.displayName }}
                             </div>
                             <div class="truncate text-[11px] text-muted-foreground">
@@ -440,6 +442,19 @@
         }
         selectedId.value = userId;
         loadVisits();
+    }
+
+    /**
+     * The user record behind a row, looked up while rendering.
+     *
+     * The friend list arrives in two passes: the ids and names first, then the full
+     * payloads that carry the avatar and the status. Resolving this once when the
+     * candidates were loaded froze every row onto the first pass, so the list showed
+     * names with no pictures forever after. Read here instead and Vue updates the row
+     * as the payloads land.
+     */
+    function candidateUser(candidate) {
+        return friends.value.get(candidate.userId)?.ref || candidate.user;
     }
 
     async function loadCandidates() {
