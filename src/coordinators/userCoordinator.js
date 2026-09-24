@@ -1023,6 +1023,7 @@ export function updateAutoStateChange() {
     const gameStore = useGameStore();
     const locationStore = useLocationStore();
     const favoriteStore = useFavoriteStore();
+    const friendStore = useFriendStore();
     const autoStatusRulesStore = useAutoStatusRulesStore();
 
     const legacyEnabled = generalSettingsStore.autoStateChangeEnabled;
