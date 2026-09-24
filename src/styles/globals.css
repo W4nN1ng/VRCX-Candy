@@ -327,8 +327,21 @@ body {
 
    The picture layer itself sits at z-index -1, which paints it above the body
    background but below everything else, so the body needs no rule at all. */
+/*
+ * `.bg-background` is a shared utility, so this also reaches dialogs, sticky table
+ * headers and the field separator pills - all of which are surfaces, and all of which
+ * are meant to let the picture through.
+ *
+ * The one thing in that class that is NOT a surface is the switch knob. Its own colour
+ * comes from `dark:data-[state=...]:bg-foreground` / `...bg-primary-foreground`, and
+ * Tailwind v4 puts `dark:` inside `:where()`, which adds no specificity - so this rule
+ * outranked it and painted the 16px knob the same translucent page colour as everything
+ * else, which made it vanish against both the grey off-track and the purple on-track.
+ * Excluding it by its own data-slot leaves the knob to its own classes without touching
+ * any of the surfaces that are supposed to go see-through.
+ */
 html.has-wallpaper .x-container,
-html.has-wallpaper .bg-background {
+html.has-wallpaper .bg-background:not([data-slot='switch-thumb']) {
     background-color: color-mix(in oklab, var(--background) var(--wallpaper-content-opacity, 85%), transparent);
 }
 
