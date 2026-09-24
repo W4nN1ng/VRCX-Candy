@@ -40,8 +40,8 @@
 | --- | --- |
 | 仓库 | 公开（`visibility: public`） |
 | **最新 Release** | tag `v2026.09.16-candy2`，标题 `VRCX-Candy 2026.09.16 (更新版 candy2)` —— `/releases/latest` 已确认指向它 |
-| 标签指向 | `b249a8fd`（`my-vrcx` 顶端）—— 已用 `git ls-remote` 核对 |
-| 附件 | `VRCX-Candy-Setup.exe`（205,927,894 B）、`VRCX-Candy-2026.09.16-portable.zip`（280,713,875 B）；两个都用 SHA256 和桌面/仓库产物逐字节核对过 |
+| 标签指向 | `b249a8fd`（**注意**：附件后来在 2026-09-25 又换过一次，装的是 `07f82723` 那一轮的代码，tag 本身没动，所以 tag 和包内容已经差两个 commit） |
+| 附件 | `VRCX-Candy-Setup.exe`（205,910,411 B，sha256 `73a4a815…`）、`VRCX-Candy-2026.09.16-portable.zip`（280,714,556 B，sha256 `a58913b8…`）；仓库产物、桌面副本、GitHub 回读三方 SHA 一致 |
 | 上一个 Release | `v2026.09.16-candy1`（`f1d6ea27`）**原样保留**，附件没动 |
 | 发布说明正文 | `candy/release-notes-v2026.09.16-candy2.md`（仓库里留着，方便下次照格式写） |
 | 桌面上还有 | 上面两个包的副本 + `GitHub发布说明.md`（candy1 的旧文案）+ 两个**旧的纯界面 zip**（`-r2.zip`、`2026.09.16.zip`，只含 html，别和完整程序搞混） |
