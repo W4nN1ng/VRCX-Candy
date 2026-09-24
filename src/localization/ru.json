@@ -800,7 +800,14 @@
             "same_world": "Same world, any instance",
             "add": "Add rule",
             "blend_legacy": "Compare the old alone/busy rule by light priority too",
-            "blend_legacy_hint": "Off (default): a rule you wrote here wins over the old \"when I am alone / with company\" setting. On: the old setting joins the same contest, so a red old rule beats a green new one."
+            "blend_legacy_hint": "Off (default): a rule you wrote here wins over the old \"when I am alone / with company\" setting. On: the old setting joins the same contest, so a red old rule beats a green new one.",
+            "after_title": "When nothing matches any more",
+            "mode_restore": "Restore the status I had before (recommended)",
+            "mode_fixed": "Always settle to the light chosen below",
+            "mode_off": "Do nothing, leave it as it is",
+            "mode_restore_hint": "VRCX remembers the status from just before it first changed one, and puts that back when you leave the room or close the game. A status you chose by hand is never overwritten.",
+            "mode_fixed_hint": "Heads up: while no rule is matching, this also overwrites a status you set by hand.",
+            "after_desc_placeholder": "Signature to restore (fixed mode only)"
         },
         "user": {
             "status": {

@@ -2,8 +2,17 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 
 import configRepository from '../../services/config';
-import { AUTO_STATUS_STORAGE_KEY } from '../../shared/constants/autoStatus';
-import { normalizeAutoStatusRule, parseAutoStatusRules } from '../../shared/utils/autoStatusRules';
+import {
+    AUTO_STATUS_BASELINE_KEY,
+    AUTO_STATUS_BASELINE_MAX_AGE_MS,
+    AUTO_STATUS_FALLBACK_DESC_ENABLED_KEY,
+    AUTO_STATUS_FALLBACK_DESC_KEY,
+    AUTO_STATUS_FALLBACK_MODE_KEY,
+    AUTO_STATUS_FALLBACK_MODES,
+    AUTO_STATUS_FALLBACK_STATUS_KEY,
+    AUTO_STATUS_STORAGE_KEY
+} from '../../shared/constants/autoStatus';
+import { isKnownStatus, normalizeAutoStatusRule, parseAutoStatusRules } from '../../shared/utils/autoStatusRules';
 
 /**
  * The user's automatic status rules.
@@ -19,11 +28,36 @@ import { normalizeAutoStatusRule, parseAutoStatusRules } from '../../shared/util
 export const useAutoStatusRulesStore = defineStore('AutoStatusRules', () => {
     const rules = ref([]);
     const loaded = ref(false);
-    // Set while a status write is in flight. The engine runs on a short interval and
-    // the endpoint neither merges nor throttles PUTs, so without this a slow response
-    // lets the next tick decide from a status that has already been changed.
-    const pending = ref(false);
-    let lastWrite = 0;
+
+    // What to settle to once nothing matches. 'restore' is the default because it only
+    // ever undoes what this feature itself did; 'fixed' is for people who want the
+    // light pinned regardless of what they choose by hand.
+    const fallbackMode = ref('restore');
+    const fallbackStatus = ref('join me');
+    const fallbackDescriptionEnabled = ref(false);
+    const fallbackDescription = ref('');
+    // The status as it was before this feature first changed it, or null. Kept in
+    // config rather than memory so a restart mid-room still knows what to put back.
+    const baseline = ref(null);
+
+    function readBaseline(raw) {
+        if (!raw) {
+            return null;
+        }
+        try {
+            const parsed = JSON.parse(raw);
+            const status = parsed?.status;
+            if (!isKnownStatus(status)) {
+                return null;
+            }
+            if (!Number.isFinite(parsed?.at) || Date.now() - parsed.at > AUTO_STATUS_BASELINE_MAX_AGE_MS) {
+                return null;
+            }
+            return { status, description: typeof parsed.description === 'string' ? parsed.description : null };
+        } catch {
+            return null;
+        }
+    }
 
     async function load() {
         try {
@@ -31,10 +65,73 @@ export const useAutoStatusRulesStore = defineStore('AutoStatusRules', () => {
             rules.value = parseAutoStatusRules(stored);
         } catch {
             rules.value = [];
+        }
+        try {
+            const mode = await configRepository.getString(AUTO_STATUS_FALLBACK_MODE_KEY, 'restore');
+            fallbackMode.value = AUTO_STATUS_FALLBACK_MODES.includes(mode) ? mode : 'restore';
+            const status = await configRepository.getString(AUTO_STATUS_FALLBACK_STATUS_KEY, 'join me');
+            fallbackStatus.value = isKnownStatus(status) ? status : 'join me';
+            fallbackDescriptionEnabled.value = await configRepository.getBool(
+                AUTO_STATUS_FALLBACK_DESC_ENABLED_KEY,
+                false
+            );
+            fallbackDescription.value = await configRepository.getString(AUTO_STATUS_FALLBACK_DESC_KEY, '');
+            baseline.value = readBaseline(await configRepository.getString(AUTO_STATUS_BASELINE_KEY, null));
+        } catch (error) {
+            console.error('Failed to load auto status fallback settings', error);
         } finally {
             loaded.value = true;
         }
     }
+
+    async function setFallbackMode(mode) {
+        fallbackMode.value = AUTO_STATUS_FALLBACK_MODES.includes(mode) ? mode : 'restore';
+        await configRepository.setString(AUTO_STATUS_FALLBACK_MODE_KEY, fallbackMode.value);
+    }
+
+    async function setFallbackStatus(status) {
+        fallbackStatus.value = isKnownStatus(status) ? status : 'join me';
+        await configRepository.setString(AUTO_STATUS_FALLBACK_STATUS_KEY, fallbackStatus.value);
+    }
+
+    async function setFallbackDescriptionEnabled(on) {
+        fallbackDescriptionEnabled.value = on === true;
+        await configRepository.setBool(AUTO_STATUS_FALLBACK_DESC_ENABLED_KEY, fallbackDescriptionEnabled.value);
+    }
+
+    async function setFallbackDescription(text) {
+        fallbackDescription.value = String(text ?? '').slice(0, 32);
+        await configRepository.setString(AUTO_STATUS_FALLBACK_DESC_KEY, fallbackDescription.value);
+    }
+
+    async function captureBaseline(current) {
+        if (baseline.value) {
+            return;
+        }
+        const status = current?.status;
+        if (!isKnownStatus(status)) {
+            return;
+        }
+        baseline.value = {
+            status,
+            description: typeof current?.statusDescription === 'string' ? current.statusDescription : null
+        };
+        await configRepository.setString(
+            AUTO_STATUS_BASELINE_KEY,
+            JSON.stringify({ ...baseline.value, at: Date.now() })
+        );
+    }
+
+    async function clearBaseline() {
+        baseline.value = null;
+        await configRepository.remove(AUTO_STATUS_BASELINE_KEY);
+    }
+
+    // Set while a status write is in flight. The engine runs on a short interval and
+    // the endpoint neither merges nor throttles PUTs, so without this a slow response
+    // lets the next tick decide from a status that has already been changed.
+    const pending = ref(false);
+    let lastWrite = 0;
 
     async function save() {
         try {
@@ -136,9 +233,20 @@ export const useAutoStatusRulesStore = defineStore('AutoStatusRules', () => {
         rules,
         loaded,
         pending,
+        fallbackMode,
+        fallbackStatus,
+        fallbackDescriptionEnabled,
+        fallbackDescription,
+        baseline,
         load,
         save,
         ensureLoaded,
+        setFallbackMode,
+        setFallbackStatus,
+        setFallbackDescriptionEnabled,
+        setFallbackDescription,
+        captureBaseline,
+        clearBaseline,
         addRule,
         updateRule,
         removeRule,

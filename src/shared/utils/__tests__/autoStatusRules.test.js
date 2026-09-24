@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 
 import {
     decideAutoStatus,
+    decideFallbackStatus,
     FRIEND_SCOPE,
     normalizeAutoStatusRule,
     outranks,
@@ -9,6 +10,7 @@ import {
     pickWinningRule,
     RULE_TYPE,
     ruleMatches,
+    shouldCaptureBaseline,
     splitLocationTag
 } from '../autoStatusRules';
 
@@ -203,6 +205,95 @@ describe('conflict resolution', () => {
             rule({ targetId: 'wrld_world1', type: RULE_TYPE.World, status: 'join me', pin: true })
         ];
         expect(pickWinningRule(rules, ctx()).status).toBe('join me');
+    });
+});
+
+describe('falling back when nothing matches', () => {
+    const baseline = { status: 'join me', description: null };
+    const fallback = { status: 'active', description: null };
+
+    test('a matching decision wins and there is nothing to fall back to', () => {
+        expect(
+            decideFallbackStatus({
+                decision: { status: 'busy', description: null, source: 'rule' },
+                mode: 'restore',
+                baseline,
+                currentStatus: 'busy'
+            })
+        ).toBeNull();
+    });
+
+    test('off leaves the status alone', () => {
+        expect(
+            decideFallbackStatus({ decision: null, mode: 'off', baseline, fallback, currentStatus: 'busy' })
+        ).toBeNull();
+    });
+
+    test('restore puts back exactly what this feature changed', () => {
+        const out = decideFallbackStatus({
+            decision: null,
+            mode: 'restore',
+            baseline,
+            currentStatus: 'busy'
+        });
+        expect(out).toEqual({ status: 'join me', description: null, source: 'restore' });
+    });
+
+    test('restore invents nothing when there is no record', () => {
+        // Without a record the only option would be guessing, which is how a feature
+        // ends up overwriting a status the person chose themselves.
+        expect(
+            decideFallbackStatus({ decision: null, mode: 'restore', baseline: null, fallback, currentStatus: 'busy' })
+        ).toBeNull();
+    });
+
+    test('fixed settles to the configured light even with no record', () => {
+        const out = decideFallbackStatus({
+            decision: null,
+            mode: 'fixed',
+            baseline: null,
+            fallback,
+            currentStatus: 'busy'
+        });
+        expect(out).toEqual({ status: 'active', description: null, source: 'fallback' });
+    });
+
+    test('no write is queued when the status is already where it belongs', () => {
+        // The engine runs every three seconds against an endpoint that is not
+        // throttled, so a no-op must not turn into a request.
+        expect(
+            decideFallbackStatus({ decision: null, mode: 'restore', baseline, currentStatus: 'join me' })
+        ).toBeNull();
+    });
+
+    test('a description still has to be written even when the light already matches', () => {
+        const out = decideFallbackStatus({
+            decision: null,
+            mode: 'restore',
+            baseline: { status: 'join me', description: '回来了' },
+            currentStatus: 'join me'
+        });
+        expect(out.description).toBe('回来了');
+    });
+
+    test('a corrupt record is ignored rather than sent', () => {
+        expect(
+            decideFallbackStatus({
+                decision: null,
+                mode: 'restore',
+                baseline: { status: 'asleep', description: null },
+                currentStatus: 'busy'
+            })
+        ).toBeNull();
+    });
+});
+
+describe('baseline capture', () => {
+    test('only a rule change is undoable, and only the first one', () => {
+        expect(shouldCaptureBaseline({ source: 'rule' }, null)).toBe(true);
+        expect(shouldCaptureBaseline({ source: 'legacy' }, null)).toBe(false);
+        expect(shouldCaptureBaseline({ source: 'rule' }, { status: 'join me' })).toBe(false);
+        expect(shouldCaptureBaseline(null, null)).toBe(false);
     });
 });
 

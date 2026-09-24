@@ -151,6 +151,72 @@
                     </Button>
                 </div>
 
+                <!-- What happens when nothing matches any more. Without this the status
+                     just stays where a rule left it, so leaving a friend's room or
+                     closing the game would keep a red light on forever. -->
+                <div class="fallback-block">
+                    <div class="fallback-title">{{ t('dialog.auto_status_rules.after_title') }}</div>
+
+                    <div class="fallback-row">
+                        <Select
+                            :model-value="fallbackMode"
+                            @update:modelValue="(v) => autoStatusRulesStore.setFallbackMode(v)">
+                            <SelectTrigger size="sm" class="w-64 shrink-0">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="restore">
+                                    {{ t('dialog.auto_status_rules.mode_restore') }}
+                                </SelectItem>
+                                <SelectItem value="fixed">
+                                    {{ t('dialog.auto_status_rules.mode_fixed') }}
+                                </SelectItem>
+                                <SelectItem value="off">{{ t('dialog.auto_status_rules.mode_off') }}</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <template v-if="fallbackMode !== 'off'">
+                            <Select
+                                :model-value="fallbackStatus"
+                                @update:modelValue="(v) => autoStatusRulesStore.setFallbackStatus(v)">
+                                <SelectTrigger size="sm" class="w-fit shrink-0">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="busy">
+                                        <i class="x-user-status busy"></i> {{ t('dialog.user.status.busy') }}
+                                    </SelectItem>
+                                    <SelectItem value="ask me">
+                                        <i class="x-user-status askme"></i> {{ t('dialog.user.status.ask_me') }}
+                                    </SelectItem>
+                                    <SelectItem value="active">
+                                        <i class="x-user-status online"></i> {{ t('dialog.user.status.online') }}
+                                    </SelectItem>
+                                    <SelectItem value="join me">
+                                        <i class="x-user-status joinme"></i> {{ t('dialog.user.status.join_me') }}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            <Input
+                                class="min-w-36 max-w-72 flex-1"
+                                :maxlength="32"
+                                :model-value="fallbackDescription"
+                                :placeholder="t('dialog.auto_status_rules.after_desc_placeholder')"
+                                :disabled="fallbackMode !== 'fixed'"
+                                @update:modelValue="(v) => autoStatusRulesStore.setFallbackDescription(v)" />
+                        </template>
+                    </div>
+
+                    <p class="rules-hint">
+                        {{
+                            fallbackMode === 'fixed'
+                                ? t('dialog.auto_status_rules.mode_fixed_hint')
+                                : t('dialog.auto_status_rules.mode_restore_hint')
+                        }}
+                    </p>
+                </div>
+
                 <SimpleSwitch
                     :label="t('dialog.auto_status_rules.blend_legacy')"
                     :tooltip="t('dialog.auto_status_rules.blend_legacy_hint')"
@@ -184,7 +250,7 @@
     const worldStore = useWorldStore();
     const generalSettingsStore = useGeneralSettingsStore();
 
-    const { rules } = storeToRefs(autoStatusRulesStore);
+    const { rules, fallbackMode, fallbackStatus, fallbackDescription } = storeToRefs(autoStatusRulesStore);
     const { autoStateChangeRulesBlendLegacy } = storeToRefs(generalSettingsStore);
     const { setAutoStateChangeRulesBlendLegacy } = generalSettingsStore;
 
@@ -313,5 +379,26 @@
         align-items: center;
         gap: 6px;
         padding-top: 8px;
+    }
+
+    .fallback-block {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .fallback-title {
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .fallback-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
     }
 </style>

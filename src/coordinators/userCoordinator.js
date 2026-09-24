@@ -24,7 +24,7 @@ import { database } from '../services/database';
 import { patchUserFromEvent } from '../queries';
 import { watchState } from '../services/watchState';
 import { useAutoStatusRulesStore } from '../stores/settings/autoStatusRules';
-import { decideAutoStatus } from '../shared/utils/autoStatusRules';
+import { decideAutoStatus, decideFallbackStatus, shouldCaptureBaseline } from '../shared/utils/autoStatusRules';
 import { AUTO_STATUS_MIN_WRITE_GAP_MS } from '../shared/constants/autoStatus';
 import { applyAvatar, showAvatarDialog } from './avatarCoordinator';
 import { applyFavorite } from './favoriteCoordinator';
@@ -1017,6 +1017,63 @@ function buildAutoStatusContext(locationStore, friendStore) {
     };
 }
 
+/**
+ * Put the status back once no rule matches: leaving the friend's room, leaving the
+ * world, or closing the game altogether.
+ *
+ * Lives in its own function because it is reached from two places - outside a room and
+ * inside one with nothing matching - and both need the same write guard.
+ *
+ * @param {object} userStore
+ * @param {object} autoStatusRulesStore
+ */
+function applyAutoStatusFallback(userStore, autoStatusRulesStore) {
+    const current = userStore.currentUser;
+    const fallback = autoStatusRulesStore.fallbackDescriptionEnabled
+        ? { status: autoStatusRulesStore.fallbackStatus, description: autoStatusRulesStore.fallbackDescription }
+        : { status: autoStatusRulesStore.fallbackStatus, description: null };
+
+    const restore = decideFallbackStatus({
+        decision: null,
+        mode: autoStatusRulesStore.fallbackMode,
+        baseline: autoStatusRulesStore.baseline,
+        fallback,
+        currentStatus: current.status
+    });
+
+    if (!restore || restore.status === current.status) {
+        return;
+    }
+
+    if (!autoStatusRulesStore.claimWrite(AUTO_STATUS_MIN_WRITE_GAP_MS)) {
+        return;
+    }
+
+    const params = { status: restore.status };
+    if (restore.description) {
+        params.statusDescription = restore.description;
+    }
+
+    userRequest
+        .saveCurrentUser(params)
+        .then(() => {
+            autoStatusRulesStore.releaseWrite(true);
+            // Back to normal, so there is nothing left to undo. Clearing it here is what
+            // stops a stale record from dragging the status back weeks later.
+            autoStatusRulesStore.clearBaseline();
+            const text = `Status restored to ${restore.status}`;
+            if (AppDebug.errorNoty) {
+                toast.dismiss(AppDebug.errorNoty);
+            }
+            AppDebug.errorNoty = toast.info(text);
+            console.log(text);
+        })
+        .catch((error) => {
+            autoStatusRulesStore.releaseWrite(false);
+            console.error('Failed to restore automatic status', error);
+        });
+}
+
 export function updateAutoStateChange() {
     const userStore = useUserStore();
     const generalSettingsStore = useGeneralSettingsStore();
@@ -1028,18 +1085,21 @@ export function updateAutoStateChange() {
 
     const legacyEnabled = generalSettingsStore.autoStateChangeEnabled;
     const rulesEnabled = autoStatusRulesStore.rules.some((rule) => rule.enabled);
-    if (!legacyEnabled && !rulesEnabled) {
+    const fallbackEnabled = autoStatusRulesStore.fallbackMode !== 'off';
+    if (!legacyEnabled && !rulesEnabled && !fallbackEnabled) {
         return;
     }
 
     const locationTag = locationStore.lastLocation.location;
-    if (
-        !gameStore.isGameRunning ||
-        locationTag === '' ||
-        // Traveling has no occupants yet, so a rule would read an empty room as
-        // "this person is not here" and switch the status the wrong way.
-        locationTag === 'traveling'
-    ) {
+    // Traveling has no occupants yet, so a rule would read an empty room as "this
+    // person is not here" and switch the status the wrong way.
+    const inRoom = gameStore.isGameRunning && locationTag !== '' && locationTag !== 'traveling';
+
+    // Out of the game entirely is not a reason to do nothing - it is precisely when the
+    // status a rule set has to be put back. The engine used to bail out here, which left
+    // people stuck on a red light after logging out.
+    if (!inRoom) {
+        applyAutoStatusFallback(userStore, autoStatusRulesStore);
         return;
     }
 
@@ -1130,8 +1190,22 @@ export function updateAutoStateChange() {
         blendLegacy: generalSettingsStore.autoStateChangeRulesBlendLegacy
     });
 
-    if (!decision || decision.status === currentStatus) {
+    if (!decision) {
+        // In a room, nothing matching: still the right moment to put things back if a
+        // rule changed them a minute ago - the friend left, or the instance changed.
+        applyAutoStatusFallback(userStore, autoStatusRulesStore);
         return;
+    }
+
+    if (decision.status === currentStatus) {
+        return;
+    }
+
+    // Remember what it was, but only for a change this feature is responsible for, and
+    // only the first one - otherwise a rule that keeps firing would overwrite the
+    // record with its own output and there would be nothing left to restore.
+    if (shouldCaptureBaseline(decision, autoStatusRulesStore.baseline)) {
+        autoStatusRulesStore.captureBaseline(userStore.currentUser);
     }
 
     if (!autoStatusRulesStore.claimWrite(AUTO_STATUS_MIN_WRITE_GAP_MS)) {

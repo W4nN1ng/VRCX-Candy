@@ -209,6 +209,81 @@ export function ruleMatches(rule, context) {
 }
 
 /**
+ * What to do when nothing matches any more.
+ *
+ * The engine used to simply stop acting - it bailed out whenever the game was closed -
+ * which meant a rule that set the status to red left it red after the user logged out,
+ * with nothing ever putting it back. This is the missing half.
+ *
+ * Three modes, because "put it back" can mean different things and the intrusive
+ * reading is the wrong default:
+ *
+ * Restore  - only undo what this feature itself did. Needs the baseline that was
+ * captured just before the first rule-driven change. Never overwrites a
+ * status the person chose by hand.
+ * fixed    - always settle to the configured light while nothing matches, including
+ * over a manual choice. Some people want exactly this; it is a real
+ * trade and it is spelled out in the UI.
+ * off      - leave the status alone.
+ *
+ * @param {object} input
+ * @param {object | null} input.decision - The rule/legacy decision, if any matched
+ * @param {string} input.mode
+ * @param {{ status: string; description: string | null } | null} input.baseline
+ * @param {{ status: string; description: string | null } | null} [input.fallback]
+ * @param {string} input.currentStatus
+ * @returns {{ status: string; description: string | null; source: string } | null}
+ */
+export function decideFallbackStatus({ decision, mode, baseline, fallback, currentStatus }) {
+    // Something matched; that decision stands and there is nothing to fall back to.
+    if (decision) {
+        return null;
+    }
+    if (mode === 'off') {
+        return null;
+    }
+
+    let candidate = null;
+    if (mode === 'fixed') {
+        // Settles outside a room too - that is the whole point of a fixed light.
+        candidate = fallback;
+    } else if (baseline) {
+        // 'restore': only ever undo our own change. Inside a room and outside both.
+        candidate = baseline;
+    }
+
+    if (!candidate || !isKnownStatus(candidate.status)) {
+        return null;
+    }
+    // Already there. Returning null rather than a no-op decision keeps the caller from
+    // firing a PUT every three seconds against an endpoint that is not throttled.
+    if (candidate.status === currentStatus && !candidate.description) {
+        return null;
+    }
+
+    return {
+        status: candidate.status,
+        description: candidate.description ? String(candidate.description).slice(0, MAX_DESCRIPTION) : null,
+        source: mode === 'fixed' ? 'fallback' : 'restore'
+    };
+}
+
+/**
+ * Whether a baseline should be recorded right now.
+ *
+ * Only a rule-driven change is undoable this way. The old alone/company behaviour is
+ * upstream's feature and has always written the status without keeping a record; making
+ * this feature responsible for undoing it would surprise its users.
+ *
+ * @param {object | null} decision
+ * @param {object | null} baseline
+ * @returns {boolean}
+ */
+export function shouldCaptureBaseline(decision, baseline) {
+    return decision?.source === 'rule' && !baseline;
+}
+
+/**
  * Pick the single rule that should win.
  *
  * Pinned rules are considered first as a group - that is the whole point of pinning.
