@@ -130,6 +130,10 @@
 - **Git Bash 会把 `/V4` 这类参数当成路径**（`C:/Program Files/Git/V4`）。调 NSIS 加详细输出时要用 `MSYS_NO_PATHCONV=1`。
 - **`grep` 关键词要挑准**：验证产物里有没有某段代码时，别用 `grep -c "forced"` 这种词（CSS 的 `forced-colors` 会误命中）。用日志模板这种唯一字符串。
 
+- **自动换状态引擎必须在"没有命中"时也运行。** 它原先一遇到游戏关闭 / 位置为空就直接 return，结果规则把状态改成红灯后，用户退出游戏状态就永远停在红灯上。现在 `inRoom` 只用来决定"能不能评估规则"，评估不出结果时仍要走恢复分支（`applyAutoStatusFallback`）。恢复有三种模式：`restore`（只撤销本功能自己的改动，需要 baseline）、`fixed`（没命中就固定成指定灯，会覆盖手动设置）、`off`。baseline 在**第一次由规则触发改动之前**捕获并存进 config（重启也不丢），恢复成功后立刻清除，且有 7 天有效期——超过就当没有记录，不会几周后把一个老状态拽回来。
+- **旧版「有人/独处」的改动不捕获 baseline、也不被恢复逻辑接管。** 那是上游的功能，一直就是无记录地直接写状态；把它纳入"可撤销"会让它的用户意外。规则引擎只是把它的结果当成一个候选参与裁决。
+- **`gameCoordinator.js` 在游戏运行状态变化时无条件调用 `runLastLocationResetFlow()`**，所以退出游戏后 `lastLocation.location` 会变成空串。恢复逻辑正是依赖这一点来判断"已经不在房间里"。
+
 ### 2026-09-24 这一轮新踩的坑（都付出了代价，务必先看）
 
 - **`npm run lint` 抓不到未声明变量。** oxlint 默认**不启用 `no-undef`**，所以"lint 0 错误"对这类 bug 完全无效。写 coordinator / store 这种接线代码时，额外跑一次 `npx oxlint -D no-undef <改过的文件>`。本次实例：`updateAutoStateChange` 里引用了没声明的 `friendStore`，构建通过、lint 通过、28 个单测全通过，**运行时每 3 秒抛 `ReferenceError`，功能静默失效**——是用户报告"没自动换状态"后翻 `%APPDATA%\VRCX\logs\VRCX*.log` 才看到的。全仓库跑这条规则会有 32 个误报（`document` 等浏览器全局没配 globals），所以只对改动文件跑。
@@ -144,6 +148,8 @@
 - **删 git worktree 前必须先摘 `node_modules` junction**，否则递归删除会顺着链接把主仓库依赖删掉。用 `[IO.Directory]::Delete($path,$false)` 只摘链接，删完核对主仓库条目数。
 - **PowerShell 内联命令里别用 `''` 嵌套单引号**（bash 会先吃掉一层，导致 `-Filter "Name = X.exe"` 变成非法 WQL，而且**整条命令解析失败、前面的语句也不会执行**）。写进 `.ps1` 用 `-File` 跑。
 - **`cmd | head -N` 会因 SIGPIPE 提前掐死循环**（清理旧构建产物时只删了 5 个就停了）。要统计就先写文件再截断显示。
+- **"离线窗口里收到的状态行"不是在线证据，是网页端改灯。** `friendStatusLights.js` 原先写着 `A status change is proof of being online` → `online = true`，把一个已关闭的离线窗口重新打开。实测 815 条 `feed_status` 行里 **82 条（10.1%）落在离线窗口内**，而且**不是滞后**：只有 3.9% 在离线后 2 分钟内，5.3% 在 5 分钟内，10.5% 在 30 分钟内，**中位数 774 分钟（12.9 小时）**。VRChat 允许不开游戏、在官网/仪表盘改灯，这些行是真的但描述的是"人不在游戏里"。后果：某好友 09-19 15:49 下线，16:16 网页改红灯，页面报"最长一次请勿打扰挂了 4 天 22 小时"。修法：`buildStatusIntervals` 里加 `loggedOff` 标记（Offline 事件置真、Online 事件置假），落在离线窗口内的 `feed_status` 事件整条丢弃。**保留的降级行为**：`loggedOff` 初值是假，所以 presence 还没开口（没见过 Offline 行）时状态行照旧生效——否则 presence 表起点晚于 status 表的用户，整段历史会直接归零。修完该好友 30 天口径：busy 从 4 天 22 小时降到 1 分钟，观察到的总时长 4h23。
+- **判断有没有引入测试回归要比对失败文件集合，不看总数**（见上）：本次全量 `npx vitest run` 是 40 个文件失败 / 166 条用例，全部是 `useChartsStore` 之类的**陈旧 mock** 和上游快照问题，`friendStatusLights.test.js` 32 条全绿。
 
 ---
 
@@ -158,7 +164,8 @@
   - `previous_status` 描述的是**本条之前那段**，且能回溯到本次在线会话的开头。所以"会话里第一条变化"的 `previous_status` 是唯一可以安全回填的推断（实测 62 个样本 98% 正确）。**别做跨会话推算**——实测间隔 <1 小时时灯只有 8% 相同，间隔 ≥1 小时才 90%。
 - `feed_bio`：`bio` / `previous_bio`，约 46% 是接口噪声。
 - `friend_log_history`：`type` 为 `DisplayName` / `TrustLevel`，带 previous 值。
-- `feed_online_offline`：上下线事件。**会重复写**（实测 205 组相邻同类型行），且**滞后于状态变化**（796 条状态变化里 121 条落在"它以为离线"的窗口内）。结论：状态变化本身就是"人在线"的证据，建模时用它反过来开在线窗口，并合并相邻同状态区间。
+- `feed_online_offline`：上下线事件。**会重复写**（实测 205 组相邻同类型行），所以要合并相邻同状态区间。
+  - **在线与否只能由它决定**，`feed_status` 不能反过来证明人在线。见下面第 5 节"离线窗口内的状态行"。
 - **共同前提**：所有表只记录 VRCX 运行期间、且只记录好友。任何"完整历史"的说法都不成立。
 
 ---
