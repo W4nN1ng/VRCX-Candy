@@ -833,6 +833,86 @@
                     "span": "{from} から {to} だけ"
                 },
                 "unknown_world": "名前のないインスタンス"
+            },
+            "friend_meetings": {
+                "tab_label": "よく一緒に遊ぶフレンド",
+                "header": "よく一緒に遊ぶフレンド",
+                "tips": {
+                    "coverage": "VRCX が動いていてゲームログが記録していた時間に、あなたとフレンドが同じインスタンスに一緒にいた時間だけを集計します。対象はフレンド一覧にいる人だけで、公開インスタンスですれ違う見知らぬ人は数えません。",
+                    "first_record": "最も古い記録: {date}",
+                    "metric": "1 個の点は{unit}を表し、この線は{metric}を数えています。"
+                },
+                "period": {
+                    "days_7": "7日",
+                    "days_30": "30日",
+                    "days_90": "3ヶ月",
+                    "days_365": "1年",
+                    "days_730": "2年",
+                    "all": "全期間"
+                },
+                "section": {
+                    "frequency": "対面の頻度",
+                    "ranking": "一番一緒に遊んでいる相手",
+                    "worlds": "一緒に回ったワールド",
+                    "worlds_one": "その人と回ったワールド",
+                    "heatmap": "遊ぶ時間帯",
+                    "recent": "最近の対面",
+                    "stale": "久しぶり"
+                },
+                "stats": {
+                    "outings": "会った回数",
+                    "meetings_hint": "同じインスタンスに {count} 回",
+                    "hours": "一緒にいた時間",
+                    "per_outing": "1 回あたり {value}",
+                    "partners": "会ったフレンド",
+                    "of_friends": "フレンド {count} 人中",
+                    "top": "一番の相手"
+                },
+                "metric": {
+                    "outings": "会った回数",
+                    "meetings": "同室の回数",
+                    "days": "会った日数",
+                    "hours": "時間"
+                },
+                "bucket": {
+                    "day": "1日",
+                    "week": "1週間",
+                    "month": "1ヶ月"
+                },
+                "line": {
+                    "total": "全員"
+                },
+                "row": {
+                    "detail": "{outings} 回 · 同室 {meetings} 回 · {hours} 時間 · ワールド {worlds} · 日時 {days}"
+                },
+                "world": {
+                    "detail": "一緒に {meetings} 回 · 合わせて {hours} 時間",
+                    "with": "{names} と",
+                    "and_more": "{names} ほか {count} 人"
+                },
+                "outing": {
+                    "detail": "一緒に {hours} 時間 · 部屋移動 {stops} 回 · ワールド {worlds} 件"
+                },
+                "heatmap": {
+                    "peak": "一番活発: {day} {hour} 時ごろ、合計 {minutes} 分"
+                },
+                "stale": {
+                    "last": "前回は {days} 日前 · 合計 {meetings} 回",
+                    "never_met": "記録期間に同じインスタンスへ入っていないフレンドが {count} 人います。"
+                },
+                "state": {
+                    "focused": "下は この人だけ",
+                    "focus": "この人だけ",
+                    "clear": "解除"
+                },
+                "kind": {
+                    "world": "名称不明のワールド"
+                },
+                "unit": {
+                    "minutes": "分"
+                },
+                "empty": "この期間にはまだ対面の記録がありません。",
+                "empty_section": "まだ何もありません。"
             }
         },
         "tools": {
@@ -1552,6 +1632,10 @@
                 "auto_status": {
                     "title": "ステータスの自動切り替え",
                     "description": "指定したフレンドと同じインスタンスに入ったとき、または指定したワールドに入ったとき、ステータスと説明文を自動で切り替えます。離れたら元に戻します。複数のルールが同時に当てはまったら 赤 > 黄 > 緑 > 青 の順に優先。Candy の中にあります。"
+                },
+                "meetings": {
+                    "title": "よく一緒に遊ぶフレンド",
+                    "description": "誰と同じインスタンスにどれくらいいたか、一緒にどのワールドへ行ったか、どのくらいの頻度で会っているかをまとめ、7 日から全期間までの 6 段階で対面頻度を折れ線グラフにします。Candy の中にあります。"
                 }
             },
             "reopen_hint": "この画面は一度だけ自動で開きます。もう一度見るにはサイドバー上部のヘルプボタンから。",

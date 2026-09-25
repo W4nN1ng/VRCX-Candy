@@ -142,6 +142,13 @@ const navDefinitions = [
         routeName: 'charts-friend-together'
     },
     {
+        key: 'charts-friend-meetings',
+        icon: 'ri-hand-heart-line',
+        tooltip: 'view.charts.friend_meetings.tab_label',
+        labelKey: 'view.charts.friend_meetings.tab_label',
+        routeName: 'charts-friend-meetings'
+    },
+    {
         key: 'tools',
         icon: 'ri-tools-line',
         tooltip: 'nav_tooltip.tools',

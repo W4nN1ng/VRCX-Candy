@@ -9,7 +9,8 @@ const CANDY_KEYS = [
     'candy-auto-status',
     'charts-friend-footprints',
     'charts-friend-status-lights',
-    'charts-friend-together'
+    'charts-friend-together',
+    'charts-friend-meetings'
 ];
 const CHARTS_KEYS = ['charts-instance', 'charts-mutual', 'charts-hot-worlds'];
 

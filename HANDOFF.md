@@ -73,6 +73,10 @@
 | `be093ba3` + `9347b880` | 状态自动更换（按好友 / 按地图） | `shared/utils/autoStatusRules.js` 纯函数 + 28 单测；**没有新增第二个状态写入者**，见第 5 节 |
 | `028c1ec6` | 壁纸下开关滑块消失 | `.bg-background` 通用类误伤滑块，见第 5 节 |
 | `7c3d32e4` | 足迹/状态灯头像不显示 | 时机问题不是字段问题，见第 5 节 |
+| `e09731d8` | 规则不命中时自动还原 | 见第 5 节"自动换状态引擎必须在没有命中时也运行" |
+| `726ac41f` | 状态灯不再把离线时间算成挂灯 | 见第 5、6 节 `feed_online_offline` 一条 |
+| `07f82723` | 改版页面不再强制收起右侧好友栏 | 见第 5 节 |
+| （见面功能） | 常一起玩的好友 | `src/shared/utils/friendMeetings.js`（32 单测）+ `views/Charts/components/FriendMeetings.vue`，数据源 `gamelog_join_leave` × `gamelog_location`，见第 6 节。**顺带修掉 `getSelfLocationSegments` 把停留区间算反的 bug**（同游页受影响） |
 
 ### 节能模式的实测结论（重要，别重复踩）
 
@@ -178,6 +182,13 @@
 - `friend_log_history`：`type` 为 `DisplayName` / `TrustLevel`，带 previous 值。
 - `feed_online_offline`：上下线事件。**会重复写**（实测 205 组相邻同类型行），所以要合并相邻同状态区间。
   - **在线与否只能由它决定**，`feed_status` 不能反过来证明人在线。见下面第 5 节"离线窗口内的状态行"。
+- **`gamelog_location`（无表前缀，全局表）记的是"你自己"去过哪些房间**，`feed_gps` 只有好友。字段 `created_at, location, world_id, world_name, time, group_name`。
+  - **`created_at` 是"进入"时间，`time` 是"待了多久"**，所以一次停留是 `[created_at, created_at + time]`。实测 560 行里 410 行符合这个读法、**0 行**符合"created_at 是离开时间"的反读法。`time` 是离开时才由 `updateGamelogLocationTimeToDatabase` 补写进去的，所以**最新那一行的 `time` 永远是 0**（就是你现在正待着的地方）——按"当前时间"封顶 12 小时处理，别当成长度为 0 丢掉。
+  - 反着读会把每段停留整体前移自己的长度，"我和谁在同一个房间"从 413 次掉到 93 次。这个错曾经就在 `getSelfLocationSegments` 里（`9af63ea4` 引入，好友同游页用它判断"我在不在场"），2026-09-25 修掉。
+- **`gamelog_join_leave`（全局表）是"谁在哪个实例进出的"**：`created_at, type, location, user_id, display_name, time`，`type` 只有 `OnPlayerJoined` / `OnPlayerLeft`，成对出现（实测 5164 / 5158）。
+  - 这是唯一能精确到**同一个实例**判断"两个人在一起"的来源，比用 `feed_gps` 推好友停留区间更准（实测：本表 413 次同处一室 / 28 位好友 / 213 小时，`feed_gps` 只能看到 291 次，其中 6 次还是本表没看到的）。
+  - **它包含公共房间里所有陌生人**，不是只有好友（2896 个不同 user_id vs 64 位好友）。所以查询里必须 `user_id IN (SELECT user_id FROM {前缀}_friend_log_current)`，实测把行数从 10324 压到 911（少 91%）。`friend_log_current` 就是好友名单（行数 = 好友数）。
+  - 只有 GameLog 开着才有数据；且只覆盖"你进过的实例"，正好是判断见面需要的范围。
 - **共同前提**：所有表只记录 VRCX 运行期间、且只记录好友。任何"完整历史"的说法都不成立。
 
 ---

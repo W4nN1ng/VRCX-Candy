@@ -13,6 +13,7 @@ const testDefinitions = [
     { key: 'charts-friend-footprints', routeName: 'charts-friend-footprints' },
     { key: 'charts-friend-status-lights', routeName: 'charts-friend-status-lights' },
     { key: 'charts-friend-together', routeName: 'charts-friend-together' },
+    { key: 'charts-friend-meetings', routeName: 'charts-friend-meetings' },
     { key: 'candy-auto-status', routeName: 'candy-auto-status' },
     { key: 'notification', routeName: 'notification' },
     { key: 'direct-access', action: 'direct-access' }
@@ -266,7 +267,8 @@ describe('sanitizeLayout', () => {
         expect(candyPages(candyFolder.items)).toEqual([
             'charts-friend-footprints',
             'charts-friend-status-lights',
-            'charts-friend-together'
+            'charts-friend-together',
+            'charts-friend-meetings'
         ]);
     });
 
@@ -285,7 +287,8 @@ describe('sanitizeLayout', () => {
                     'charts-mutual',
                     'charts-friend-status-lights',
                     'charts-hot-worlds',
-                    'charts-friend-together'
+                    'charts-friend-together',
+                    'charts-friend-meetings'
                 ]
             }
         ];
@@ -296,7 +299,8 @@ describe('sanitizeLayout', () => {
         expect(candyPages(result[0].items)).toEqual([
             'charts-friend-footprints',
             'charts-friend-status-lights',
-            'charts-friend-together'
+            'charts-friend-together',
+            'charts-friend-meetings'
         ]);
     });
 
@@ -315,11 +319,13 @@ describe('sanitizeLayout', () => {
         // Already present, so it is left alone - and its own order is respected.
         expect(result[0].key).toBe('feed');
         expect(result[1].id).toBe('default-folder-candy');
-        // the person's own order survives
+        // the person's own order survives, and a page that did not exist when the
+        // layout was saved joins at the end rather than shuffling anything
         expect(candyPages(result[1].items)).toEqual([
             'charts-friend-together',
             'charts-friend-status-lights',
-            'charts-friend-footprints'
+            'charts-friend-footprints',
+            'charts-friend-meetings'
         ]);
     });
 
@@ -327,7 +333,11 @@ describe('sanitizeLayout', () => {
         const layout = [{ type: 'item', key: 'feed' }];
         const result = runSanitize(layout, ['charts-friend-together']);
         const candyFolder = result.find((e) => e.type === 'folder' && e.id === 'default-folder-candy');
-        expect(candyPages(candyFolder.items)).toEqual(['charts-friend-footprints', 'charts-friend-status-lights']);
+        expect(candyPages(candyFolder.items)).toEqual([
+            'charts-friend-footprints',
+            'charts-friend-status-lights',
+            'charts-friend-meetings'
+        ]);
     });
 
     test('auto-appends charts folder when charts keys are neither used nor hidden', () => {

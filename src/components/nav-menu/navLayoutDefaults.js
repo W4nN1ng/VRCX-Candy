@@ -15,7 +15,8 @@ export function createBaseDefaultNavLayout(t) {
                 'candy-auto-status',
                 'charts-friend-footprints',
                 'charts-friend-status-lights',
-                'charts-friend-together'
+                'charts-friend-together',
+                'charts-friend-meetings'
             ]
         },
         { type: 'item', key: 'feed' },

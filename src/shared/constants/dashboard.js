@@ -11,6 +11,7 @@ export const DASHBOARD_BLOCKED_PANEL_KEYS = new Set([
     'charts-friend-footprints',
     'charts-friend-status-lights',
     'charts-friend-together',
+    'charts-friend-meetings',
     'candy-auto-status',
     'tools'
 ]);

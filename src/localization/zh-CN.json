@@ -841,6 +841,86 @@
                     "span": "只在 {from} 到 {to}"
                 },
                 "unknown_world": "未命名房间"
+            },
+            "friend_meetings": {
+                "tab_label": "常一起玩的好友",
+                "header": "常一起玩的好友",
+                "tips": {
+                    "coverage": "这里只统计 VRCX 开着、游戏日志也在记的时候，你和好友同时在同一个房间的时间。只算好友列表里的人，公共房间里路过的陌生人不计入；VRCX 没运行的那段时间不会有记录。",
+                    "first_record": "最早记录到的一次：{date}",
+                    "metric": "一个点代表{unit}，这条线数的是{metric}。"
+                },
+                "period": {
+                    "days_7": "7 天",
+                    "days_30": "30 天",
+                    "days_90": "一个季度",
+                    "days_365": "一年",
+                    "days_730": "两年",
+                    "all": "全部"
+                },
+                "section": {
+                    "frequency": "见面频率",
+                    "ranking": "谁和我玩得最多",
+                    "worlds": "一起去过的地图",
+                    "worlds_one": "我们一起去过的地图",
+                    "heatmap": "一般什么时候一起玩",
+                    "recent": "最近的见面",
+                    "stale": "好久不见"
+                },
+                "stats": {
+                    "outings": "见面场次",
+                    "meetings_hint": "同处一个房间 {count} 次",
+                    "hours": "一起玩的时间",
+                    "per_outing": "平均每场 {value}",
+                    "partners": "见过的好友",
+                    "of_friends": "好友共 {count} 位",
+                    "top": "最常一起玩"
+                },
+                "metric": {
+                    "outings": "见面场次",
+                    "meetings": "同房间次数",
+                    "days": "见面天数",
+                    "hours": "小时"
+                },
+                "bucket": {
+                    "day": "一天",
+                    "week": "一周",
+                    "month": "一个月"
+                },
+                "line": {
+                    "total": "全部好友"
+                },
+                "row": {
+                    "detail": "{outings} 场 · {meetings} 次同房间 · {hours} 小时 · {worlds} 张图 · {days} 天"
+                },
+                "world": {
+                    "detail": "一起去过 {meetings} 次 · 共 {hours} 小时",
+                    "with": "和 {names}",
+                    "and_more": "{names} 等 {count} 人"
+                },
+                "outing": {
+                    "detail": "一起 {hours} 小时 · 换了 {stops} 个房间 · {worlds} 张图"
+                },
+                "heatmap": {
+                    "peak": "最活跃：{day} {hour} 点前后，共 {minutes} 分钟"
+                },
+                "stale": {
+                    "last": "上次见面是 {days} 天前 · 一共 {meetings} 次",
+                    "never_met": "还有 {count} 位好友在记录期间没和你进过同一个房间。"
+                },
+                "state": {
+                    "focused": "下方只看他",
+                    "focus": "只看他",
+                    "clear": "取消"
+                },
+                "kind": {
+                    "world": "未知地图"
+                },
+                "unit": {
+                    "minutes": "分钟"
+                },
+                "empty": "这个时间范围内还没有见面记录。",
+                "empty_section": "暂时没有内容。"
             }
         },
         "tools": {
@@ -1567,6 +1647,10 @@
                 "auto_status": {
                     "title": "状态自动更换",
                     "description": "和指定好友在同一个房间、或者进了指定地图时，自动换成你指定的状态灯和签名；离开之后自动换回原来的。几条规则同时命中时按 红灯 > 黄灯 > 绿灯 > 蓝灯 取最高的那条。在 Candy 分组里。"
+                },
+                "meetings": {
+                    "title": "常一起玩的好友",
+                    "description": "记录你和哪位好友在同一个房间待了多久、一起去过哪些地图、多久见一次面，并按 7 天到全部六个范围画出见面频率折线。在 Candy 分组里。"
                 }
             },
             "reopen_hint": "这个说明只自动弹一次。以后想再看，点侧边栏最上方的帮助按钮。",

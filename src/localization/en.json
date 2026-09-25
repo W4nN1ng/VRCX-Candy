@@ -844,6 +844,86 @@
                     "span": "Only {from} to {to}"
                 },
                 "unknown_world": "Unnamed instance"
+            },
+            "friend_meetings": {
+                "tab_label": "Friends I play with",
+                "header": "Friends I play with",
+                "tips": {
+                    "coverage": "This counts only the stretches where you and a friend were in the same instance while VRCX was running with the game log on. Only people on your friend list are counted - strangers you pass in a public world are not, and neither is any time VRCX was closed.",
+                    "first_record": "Earliest recorded meeting: {date}",
+                    "metric": "Each point is one {unit}, and the line counts {metric}."
+                },
+                "period": {
+                    "days_7": "7 days",
+                    "days_30": "30 days",
+                    "days_90": "3 months",
+                    "days_365": "1 year",
+                    "days_730": "2 years",
+                    "all": "All"
+                },
+                "section": {
+                    "frequency": "Meeting frequency",
+                    "ranking": "Who you play with most",
+                    "worlds": "Worlds you have been in together",
+                    "worlds_one": "Worlds you two have been in together",
+                    "heatmap": "When you tend to play",
+                    "recent": "Recent meetings",
+                    "stale": "Long time no see"
+                },
+                "stats": {
+                    "outings": "Outings",
+                    "meetings_hint": "{count} times in the same room",
+                    "hours": "Time together",
+                    "per_outing": "{value} per outing",
+                    "partners": "Friends met",
+                    "of_friends": "out of {count} friends",
+                    "top": "Most played with"
+                },
+                "metric": {
+                    "outings": "Outings",
+                    "meetings": "Same room",
+                    "days": "Days",
+                    "hours": "Hours"
+                },
+                "bucket": {
+                    "day": "day",
+                    "week": "week",
+                    "month": "month"
+                },
+                "line": {
+                    "total": "Everyone"
+                },
+                "row": {
+                    "detail": "{outings} outings · {meetings} same room · {hours} h · {worlds} worlds · {days} days"
+                },
+                "world": {
+                    "detail": "{meetings} times · {hours} h together",
+                    "with": "with {names}",
+                    "and_more": "{names} and {count} more"
+                },
+                "outing": {
+                    "detail": "{hours} h together · {stops} rooms · {worlds} worlds"
+                },
+                "heatmap": {
+                    "peak": "Busiest around {day} {hour}:00, {minutes} minutes"
+                },
+                "stale": {
+                    "last": "Last met {days} days ago · {meetings} times",
+                    "never_met": "{count} friends on your list have not shared a room with you while the log was running."
+                },
+                "state": {
+                    "focused": "shown below",
+                    "focus": "Focus",
+                    "clear": "Clear"
+                },
+                "kind": {
+                    "world": "Unknown world"
+                },
+                "unit": {
+                    "minutes": "min"
+                },
+                "empty": "No meetings in this range yet.",
+                "empty_section": "Nothing here yet."
             }
         },
         "tools": {
@@ -1573,6 +1653,10 @@
                 "auto_status": {
                     "title": "Automatic status",
                     "description": "Changes your status light and its signature when you join a specific friend or enter a specific map, and puts your old status back once you leave. When several rules match at once the strongest light wins: busy over ask me over active over join me. It is under Candy."
+                },
+                "meetings": {
+                    "title": "Friends I play with",
+                    "description": "Shows who you spend the most time with in the same instance, which worlds you have been to together, and how often you meet, as a line chart over ranges from 7 days to everything. It is under Candy."
                 }
             },
             "reopen_hint": "This screen is shown once. You can open it again from the help button at the top of the sidebar.",

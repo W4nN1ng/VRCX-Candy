@@ -128,6 +128,11 @@ const routes = [
                 component: () => import('./../views/Charts/components/FriendTogether.vue')
             },
             {
+                path: 'charts/friend-meetings',
+                name: 'charts-friend-meetings',
+                component: () => import('./../views/Charts/components/FriendMeetings.vue')
+            },
+            {
                 path: 'candy/auto-status',
                 name: 'candy-auto-status',
                 component: () => import('./../views/Candy/components/AutoStatusRules.vue')
