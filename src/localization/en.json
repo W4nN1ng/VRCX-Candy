@@ -883,7 +883,7 @@
                     "outings": "Outings",
                     "meetings": "Same room",
                     "days": "Days",
-                    "hours": "Hours"
+                    "meetingMs": "Hours"
                 },
                 "bucket": {
                     "day": "day",

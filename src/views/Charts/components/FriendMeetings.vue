@@ -84,7 +84,7 @@
                                     t('view.charts.friend_meetings.metric.days')
                                 }}</ToggleGroupItem>
                                 <ToggleGroupItem value="meetingMs">{{
-                                    t('view.charts.friend_meetings.metric.hours')
+                                    t('view.charts.friend_meetings.metric.meetingMs')
                                 }}</ToggleGroupItem>
                             </ToggleGroup>
                         </div>
@@ -522,13 +522,17 @@
     }
 
     /**
+     * The ranking holds real milliseconds, while the chart axis is rounded to hours
+     * so its numbers stay readable - only the ranking and the stat cards come
+     * through here.
+     *
      * @param {number} value
      * @param {string} unit
      * @returns {string}
      */
     function formatMetric(value, unit) {
         if (unit === 'meetingMs') {
-            return timeToText(value * HOUR_MS);
+            return timeToText(value);
         }
         return String(value);
     }

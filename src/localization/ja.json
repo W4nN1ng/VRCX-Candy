@@ -872,7 +872,7 @@
                     "outings": "会った回数",
                     "meetings": "同室の回数",
                     "days": "会った日数",
-                    "hours": "時間"
+                    "meetingMs": "時間"
                 },
                 "bucket": {
                     "day": "1日",

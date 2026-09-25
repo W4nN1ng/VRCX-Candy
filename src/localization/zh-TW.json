@@ -868,7 +868,7 @@
                     "outings": "見面場次",
                     "meetings": "同房間次數",
                     "days": "見面天數",
-                    "hours": "小時"
+                    "meetingMs": "小時"
                 },
                 "bucket": {
                     "day": "一天",
