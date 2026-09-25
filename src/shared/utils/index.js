@@ -12,6 +12,7 @@ export * from './csv';
 export * from './fileUtils';
 export * from './friend';
 export * from './friendFootprints';
+export * from './friendMeetings';
 export * from './friendStatusLights';
 export * from './friendTogether';
 export * from './group';

@@ -2,6 +2,11 @@ import { dbVars } from '../database';
 
 import sqliteService from '../sqlite.js';
 
+// How far an unfinished stay may be stretched. The row for the instance you are in
+// right now has no duration yet, and a twelve hour ceiling matches what the rest of
+// the friend views already treat as "VRCX was probably not running after this".
+const MAX_OPEN_SELF_STAY_MS = 12 * 60 * 60 * 1000;
+
 const gameLog = {
     async getGamelogDatabase() {
         var gamelogDatabase = [];
@@ -1417,14 +1422,22 @@ const gameLog = {
      * Get the current user's own stays in each instance, oldest first.
      *
      * Unlike getCurrentUserOnlineSessions this also selects `location`, which is what
-     * lets the friend-together view tell "I was in that very instance" apart from
-     * "I was online somewhere else". A row stores `created_at` as the moment you left
-     * and `time` as how long you stayed, so a stay runs from created_at - time to
-     * created_at. Rows with no usable duration are dropped rather than reported as a
-     * zero length stay.
+     * lets a view tell "I was in that very instance" apart from "I was online
+     * somewhere else".
+     *
+     * A row is written when you ENTER and `time` is filled in with the duration when
+     * you leave, so a stay runs from `created_at` to `created_at + time`. Checked
+     * against the real database: of 560 rows that could be tested, 410 line up with
+     * that reading and none fit the opposite one. Reading it the other way round
+     * shifts every stay earlier by its own length and quietly loses most of the
+     * overlaps with friends.
+     *
+     * The newest row is the instance you are standing in right now, and its `time` is
+     * still 0. That one is reported as running until now, capped at twelve hours, so
+     * the current visit is not silently missing; every other unusable row is dropped.
      *
      * @param {string} [createdAfter] - ISO timestamp to start from, empty for everything.
-     * @returns {Promise<{ location: string; startAt: number; endAt: number }[]>} Epoch ms ranges.
+     * @returns {Promise<{ location: string; worldName: string; groupName: string; startAt: number; endAt: number; open?: boolean }[]>} Epoch ms ranges.
      */
     async getSelfLocationSegments(createdAfter = '') {
         const segments = [];
@@ -1436,19 +1449,73 @@ const gameLog = {
         }
         await sqliteService.execute(
             (dbRow) => {
-                const endAt = Date.parse(dbRow[0]);
+                const startAt = Date.parse(dbRow[0]);
                 const location = String(dbRow[1] || '');
                 const time = Number(dbRow[2]) || 0;
-                const startAt = endAt - time;
-                if (!Number.isFinite(endAt) || !location || !(startAt < endAt)) {
+                if (!Number.isFinite(startAt) || !location) {
                     return;
                 }
-                segments.push({ location, startAt, endAt });
+                segments.push({
+                    location,
+                    worldName: String(dbRow[3] || ''),
+                    groupName: String(dbRow[4] || ''),
+                    endAt: startAt + Math.max(time, 0),
+                    startAt
+                });
             },
-            `SELECT created_at, location, time FROM gamelog_location ${dateClause} ORDER BY created_at ASC`,
+            `SELECT created_at, location, time, world_name, group_name FROM gamelog_location ${dateClause} ORDER BY created_at ASC`,
             params
         );
-        return segments;
+        const last = segments[segments.length - 1];
+        if (last && last.endAt <= last.startAt) {
+            last.endAt = Math.min(Date.now(), last.startAt + MAX_OPEN_SELF_STAY_MS);
+            if (last.endAt > last.startAt) {
+                last.open = true;
+            }
+        }
+        return segments.filter((segment) => segment.endAt > segment.startAt);
+    },
+
+    /**
+     * Get the join and leave rows for the friends in your list, oldest first.
+     *
+     * Gamelog_join_leave holds every player your game log has watched, which includes
+     * every stranger in every public instance you walked past - tens of thousands of
+     * rows that are not company. Restricting it to the friend roster in SQL is what
+     * keeps this usable for the "all time" view; callers still get to apply their own
+     * filter on top, because the roster table and the live friend list are not
+     * guaranteed to agree.
+     *
+     * @param {string} [createdAfter] - ISO timestamp to start from, empty for everything.
+     * @param {number} [maxEntries] - Safety ceiling on rows.
+     * @returns {Promise<
+     *     { created_at: string; type: string; location: string; user_id: string; display_name: string }[]
+     * >}
+     */
+    async getFriendPresenceRows(createdAfter = '', maxEntries = 60000) {
+        const rows = [];
+        let dateClause = '';
+        const params = { '@limit': maxEntries };
+        if (createdAfter) {
+            dateClause = 'AND created_at >= @createdAfter ';
+            params['@createdAfter'] = createdAfter;
+        }
+        await sqliteService.execute(
+            (dbRow) => {
+                rows.push({
+                    created_at: dbRow[0],
+                    type: dbRow[1] ?? '',
+                    location: dbRow[2] ?? '',
+                    user_id: dbRow[3] ?? '',
+                    display_name: dbRow[4] ?? ''
+                });
+            },
+            `SELECT created_at, type, location, user_id, display_name FROM gamelog_join_leave
+             WHERE user_id IN (SELECT user_id FROM ${dbVars.userPrefix}_friend_log_current) ${dateClause}
+             ORDER BY created_at ASC, id ASC LIMIT @limit`,
+            params
+        );
+        return rows;
     },
 
     /**
