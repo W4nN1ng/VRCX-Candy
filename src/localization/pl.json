@@ -525,7 +525,8 @@
                 "tips": {
                     "coverage": "This counts only the stretches where you and a friend were in the same instance while VRCX was running with the game log on. Only people on your friend list are counted - strangers you pass in a public world are not, and neither is any time VRCX was closed.",
                     "first_record": "Earliest recorded meeting: {date}",
-                    "metric": "Each point is one {unit}, and the line counts {metric}."
+                    "metric": "Each point is one {unit}, and the line counts {metric}.",
+                    "counting": "\"Same room\" counts rooms: every new instance you enter together is one. \"Outings\" merge a run of hops into one occasion, and only start a new one after an hour apart. A few seconds of log churn from a reconnect stays one meeting."
                 },
                 "period": {
                     "days_7": "7 days",

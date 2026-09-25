@@ -122,7 +122,8 @@ describe('buildMeetings', () => {
                 groupName: '',
                 startAt: 10 * MINUTE,
                 endAt: 30 * MINUTE,
-                durationMs: 20 * MINUTE
+                durationMs: 20 * MINUTE,
+                bounces: 1
             }
         ]);
     });
@@ -174,6 +175,70 @@ describe('buildMeetings', () => {
         expect(meetings.map((meeting) => meeting.userId)).toEqual(['usr_a', 'usr_b']);
         expect(meetings[0].worldName).toBe('Cafe');
         expect(meetings[1].durationMs).toBe(10 * MINUTE);
+    });
+});
+
+describe('buildMeetings bounce merge', () => {
+    const stay = (startAt, endAt, location = WORLD, userId = 'usr_a') => ({
+        userId,
+        displayName: userId,
+        location,
+        worldId: 'wrld_1111',
+        startAt,
+        endAt
+    });
+
+    test('joins two stretches of the same room split by a few seconds of log churn', () => {
+        // the game log re-emits a join/leave pair when a connection bounces, which is
+        // not somebody leaving and coming back
+        const mine = [
+            { location: WORLD, startAt: 0, endAt: 10 * MINUTE },
+            { location: WORLD, startAt: 10 * MINUTE + 12000, endAt: 20 * MINUTE }
+        ];
+        const meetings = buildMeetings(mine, [stay(0, 30 * MINUTE)]);
+
+        expect(meetings).toHaveLength(1);
+        expect(meetings[0]).toMatchObject({ startAt: 0, endAt: 20 * MINUTE, durationMs: 20 * MINUTE, bounces: 2 });
+    });
+
+    test('keeps two visits apart when the gap is longer than the merge window', () => {
+        const mine = [
+            { location: WORLD, startAt: 0, endAt: 10 * MINUTE },
+            { location: WORLD, startAt: 15 * MINUTE, endAt: 25 * MINUTE }
+        ];
+        const meetings = buildMeetings(mine, [stay(0, 60 * MINUTE)]);
+
+        expect(meetings).toHaveLength(2);
+        expect(meetings.every((meeting) => meeting.bounces === 1)).toBe(true);
+    });
+
+    test('honours a custom merge window', () => {
+        const mine = [
+            { location: WORLD, startAt: 0, endAt: 10 * MINUTE },
+            { location: WORLD, startAt: 15 * MINUTE, endAt: 25 * MINUTE }
+        ];
+        const meetings = buildMeetings(mine, [stay(0, 60 * MINUTE)], { mergeGapMs: 10 * MINUTE });
+
+        expect(meetings).toHaveLength(1);
+        expect(meetings[0]).toMatchObject({ startAt: 0, endAt: 25 * MINUTE, bounces: 2 });
+    });
+
+    test('never joins two different rooms, however close they are', () => {
+        const mine = [
+            { location: WORLD, startAt: 0, endAt: 10 * MINUTE },
+            { location: OTHER, startAt: 10 * MINUTE + 1000, endAt: 20 * MINUTE }
+        ];
+        const meetings = buildMeetings(mine, [stay(0, 30 * MINUTE), stay(0, 30 * MINUTE, OTHER)]);
+
+        expect(meetings.map((meeting) => meeting.location)).toEqual([WORLD, OTHER]);
+    });
+
+    test('never merges two friends into one meeting', () => {
+        const mine = [{ location: WORLD, startAt: 0, endAt: HOUR }];
+        const meetings = buildMeetings(mine, [stay(0, HOUR, WORLD, 'usr_a'), stay(0, HOUR, WORLD, 'usr_b')]);
+
+        expect(meetings).toHaveLength(2);
+        expect(meetings.map((meeting) => meeting.userId).sort()).toEqual(['usr_a', 'usr_b']);
     });
 });
 

@@ -13,7 +13,9 @@
  * A **meeting** is one stretch where your stay in an instance overlaps a friend's
  * stay in that same instance. The `location` string carries the instance id, the
  * access type and the region, so byte equality on it is exactly "same room" - the
- * same comparison the rest of VRCX already relies on.
+ * same comparison the rest of VRCX already relies on. Two stretches of the same room
+ * with only a couple of seconds between them are one meeting: the log re-emits a
+ * join/leave pair when a connection bounces, and that is not somebody leaving.
  *
  * A meeting is not the same as an outing. Hopping through six worlds with someone is
  * six meetings but one evening together, so meetings that are close behind each other
@@ -33,6 +35,13 @@ const DAY_MS = 24 * HOUR_MS;
 
 // Under a minute together is a loading screen you happened to share, not a meeting.
 const DEFAULT_MIN_MEETING_MS = MINUTE_MS;
+
+// Two stretches in the same room this close apart are one visit, not two. The game
+// log writes a fresh join/leave pair when a connection bounces or the player list is
+// rewritten, and in the real database 42 of the 107 follow-up stretches were under two
+// minutes - the shortest being twelve seconds. Without this the room count is padded
+// by reconnections nobody experienced as leaving.
+const DEFAULT_MEETING_MERGE_MS = 2 * MINUTE_MS;
 
 // Two meetings this close apart for the same pair are one outing: instance hops,
 // re-joins, and a friend popping in to say something before moving on.
@@ -138,17 +147,54 @@ function buildFriendStays(presenceRows, friendIds, options = {}) {
 }
 
 /**
+ * @param {object[]} meetings
+ * @param {number} mergeGapMs
+ * @returns {object[]}
+ */
+function joinBouncedMeetings(meetings, mergeGapMs) {
+    const byPair = new Map();
+    for (const meeting of meetings) {
+        const key = `${meeting.userId}|${meeting.location}`;
+        if (!byPair.has(key)) {
+            byPair.set(key, []);
+        }
+        byPair.get(key).push(meeting);
+    }
+
+    const merged = [];
+    for (const list of byPair.values()) {
+        list.sort((a, b) => a.startAt - b.startAt);
+        let current = null;
+        for (const meeting of list) {
+            if (current && meeting.startAt - current.endAt <= mergeGapMs) {
+                current.endAt = Math.max(current.endAt, meeting.endAt);
+                current.durationMs = current.endAt - current.startAt;
+                current.bounces++;
+                continue;
+            }
+            current = { ...meeting, bounces: 1 };
+            merged.push(current);
+        }
+    }
+    merged.sort((a, b) => a.startAt - b.startAt);
+    return merged;
+}
+
+/**
  * Intersect your stays with your friends' stays, room by room.
  *
  * @param {object[]} selfSegments - From getSelfLocationSegments: location, startAt, endAt
  * @param {object[]} friendStays - From buildFriendStays
- * @param {{ minMeetingMs?: number }} [options]
+ * @param {{ minMeetingMs?: number; mergeGapMs?: number }} [options]
  * @returns {object[]} Meetings, oldest first
  */
 function buildMeetings(selfSegments, friendStays, options = {}) {
     const minMeetingMs = Number.isFinite(Number(options.minMeetingMs))
         ? Number(options.minMeetingMs)
         : DEFAULT_MIN_MEETING_MS;
+    const mergeGapMs = Number.isFinite(Number(options.mergeGapMs))
+        ? Number(options.mergeGapMs)
+        : DEFAULT_MEETING_MERGE_MS;
     const byLocation = new Map();
     for (const stay of friendStays || []) {
         if (!stay || !(stay.endAt > stay.startAt)) {
@@ -189,8 +235,7 @@ function buildMeetings(selfSegments, friendStays, options = {}) {
             });
         }
     }
-    meetings.sort((a, b) => a.startAt - b.startAt);
-    return meetings;
+    return joinBouncedMeetings(meetings, mergeGapMs);
 }
 
 /**
@@ -660,6 +705,7 @@ function meetingRanking(summary, options = {}) {
 }
 
 export {
+    DEFAULT_MEETING_MERGE_MS,
     DEFAULT_MIN_MEETING_MS,
     DEFAULT_OUTING_GAP_MS,
     MEETING_RANGES,

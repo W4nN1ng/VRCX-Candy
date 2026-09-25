@@ -108,6 +108,9 @@
                             t('view.charts.friend_meetings.tips.metric', { metric: metricName, unit: bucketUnitLabel })
                         }}
                     </div>
+                    <div class="text-[11px] leading-relaxed text-muted-foreground">
+                        {{ t('view.charts.friend_meetings.tips.counting') }}
+                    </div>
                 </section>
 
                 <section class="mt-3 rounded-xl border p-3">
