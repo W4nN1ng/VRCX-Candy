@@ -7,6 +7,7 @@ const DEFAULT_FOLDER_ICON = 'ri-folder-line';
 const CANDY_FOLDER_ID = 'default-folder-candy';
 const CANDY_KEYS = [
     'candy-auto-status',
+    'candy-auto-invites',
     'charts-friend-footprints',
     'charts-friend-status-lights',
     'charts-friend-together',

@@ -135,6 +135,13 @@ const navDefinitions = [
         routeName: 'candy-auto-status'
     },
     {
+        key: 'candy-auto-invites',
+        icon: 'ri-notification-badge-line',
+        tooltip: 'view.candy.auto_invites.tab_label',
+        labelKey: 'view.candy.auto_invites.tab_label',
+        routeName: 'candy-auto-invites'
+    },
+    {
         key: 'charts-friend-together',
         icon: 'ri-group-line',
         tooltip: 'view.charts.friend_together.tab_label',

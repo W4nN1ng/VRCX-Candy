@@ -40,6 +40,48 @@
                 "legacy_title": "Older rule: when I am with someone / alone",
                 "legacy_hint": "These only apply when none of the rules above match. Their settings still live in the original dialog.",
                 "legacy_open": "Open the older settings"
+            },
+            "auto_invites": {
+                "tab_label": "Auto-accept join requests",
+                "intro": "On the yellow light, nobody can enter your room until you personally say yes. This lets friends you have approved come in anyway - for the case where you agreed to meet in a VRChat sleep world and then fell asleep.",
+                "enable": "Turn on auto-accept",
+                "enable_hint": "Everything below is inert while this is off. It starts off.",
+                "guards_title": "Limits that always hold",
+                "guard_room": "It only acts while you are actually in a room with a valid location.",
+                "guard_owner": "Only your own private, friends or hidden room. Never a group room, and never somebody else’s room that you are a guest in.",
+                "guard_once": "One request is handled once, and the same friend will not get a second invite within 30 seconds.",
+                "guard_limit": "There is a daily ceiling; past it the feature records what happened without acting.",
+                "allowed_title": "Friends allowed in",
+                "allowed_empty": "Nobody has been added. With an empty list nobody gets in even when the feature is on.",
+                "pick_friend": "Pick a friend",
+                "add": "Add",
+                "remove": "Remove",
+                "limits_title": "Limits",
+                "ask_me_only": "Only while the yellow light is on",
+                "ask_me_only_hint": "With this on, nothing is auto-accepted on green, blue or red - only the yellow light waits for an invite, which is also the one you wear to sleep.",
+                "notify": "Show a toast every time one is accepted",
+                "window": "Only inside a time window",
+                "window_hint": "An end earlier than the start means it runs past midnight, for example 22:00 – 08:00.",
+                "daily_limit": "Maximum accepts per day",
+                "daily_limit_hint": "Keeps a broken path from letting people in all day.",
+                "today": "Accepted {count} of {limit} today",
+                "reset_today": "Reset the count",
+                "log_title": "Recent decisions",
+                "log_empty": "Nothing yet.",
+                "log_hint": "Only this session, cleared on restart. Skips are recorded too, so you can see why somebody did not get in.",
+                "accepted": "Auto-accepted a join request from {name}",
+                "reason": {
+                    "accepted": "Accepted",
+                    "disabled": "Turned off",
+                    "not-request": "Not a join request",
+                    "not-listed": "Not on the list",
+                    "not-own-instance": "Not my own room",
+                    "outside-window": "Outside the window",
+                    "daily-limit": "Daily limit reached",
+                    "cooldown": "Accepted moments ago",
+                    "already-handled": "Already handled",
+                    "failed": "Send failed"
+                }
             }
         },
         "login": {
@@ -862,6 +904,10 @@
                 "meetings": {
                     "title": "Friends I play with",
                     "description": "Shows who you spend the most time with in the same instance, which worlds you have been to together, and how often you meet, as a line chart over ranges from 7 days to everything. It is under Candy."
+                },
+                "auto_invites": {
+                    "title": "Auto-accept join requests",
+                    "description": "Lets a short list of friends into your own room while you are on the yellow light and not at the keyboard. Stack the limits - daily ceiling, time window, yellow-light-only - and every accept and skip is written on the page. Under Candy, off by default."
                 }
             },
             "reopen_hint": "This screen is shown once. You can open it again from the help button at the top of the sidebar.",

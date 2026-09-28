@@ -137,6 +137,11 @@ const routes = [
                 name: 'candy-auto-status',
                 component: () => import('./../views/Candy/components/AutoStatusRules.vue')
             },
+            {
+                path: 'candy/auto-invites',
+                name: 'candy-auto-invites',
+                component: () => import('./../views/Candy/components/AutoInviteApprovals.vue')
+            },
             { path: 'tools', name: 'tools', component: Tools },
             {
                 path: 'tools/gallery',

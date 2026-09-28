@@ -19,6 +19,7 @@ import { useGameLogStore } from './gameLog';
 import { useGameStore } from './game';
 import { useGeneralSettingsStore } from './settings/general';
 import { useAutoStatusRulesStore } from './settings/autoStatusRules';
+import { useAutoInviteApprovalsStore } from './settings/autoInviteApprovals';
 import { useQuickSearchStore } from './quickSearch';
 import { useGroupStore } from './group';
 import { useInstanceStore } from './instance';
@@ -127,6 +128,9 @@ export function createGlobalStores() {
         discordPresenceSettings: useDiscordPresenceSettingsStore(),
         generalSettings: useGeneralSettingsStore(),
         autoStatusRules: useAutoStatusRulesStore(),
+        // Created at startup so its settings have come back from storage before the
+        // first notification can arrive - the auto accept guard reads that flag.
+        autoInviteApprovals: useAutoInviteApprovalsStore(),
         notificationsSettings: useNotificationsSettingsStore(),
         wristOverlaySettings: useWristOverlaySettingsStore(),
         avatarProvider: useAvatarProviderStore(),
@@ -193,6 +197,7 @@ export {
     useDiscordPresenceSettingsStore,
     useGeneralSettingsStore,
     useAutoStatusRulesStore,
+    useAutoInviteApprovalsStore,
     useNotificationsSettingsStore,
     useWristOverlaySettingsStore,
     useToolsStore,

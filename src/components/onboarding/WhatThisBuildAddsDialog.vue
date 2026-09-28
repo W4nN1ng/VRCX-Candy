@@ -40,7 +40,7 @@
 
 <script setup>
     import { markRaw, onMounted, watch } from 'vue';
-    import { Footprints, HandHeart, Image, Lightbulb, UserCog, UserSquare, Users } from 'lucide-vue-next';
+    import { DoorOpen, Footprints, HandHeart, Image, Lightbulb, UserCog, UserSquare, Users } from 'lucide-vue-next';
     import { useI18n } from 'vue-i18n';
 
     import {
@@ -66,7 +66,8 @@
         { key: 'together', icon: markRaw(Users) },
         { key: 'meetings', icon: markRaw(HandHeart) },
         { key: 'wallpaper', icon: markRaw(Image) },
-        { key: 'auto_status', icon: markRaw(UserCog) }
+        { key: 'auto_status', icon: markRaw(UserCog) },
+        { key: 'auto_invites', icon: markRaw(DoorOpen) }
     ];
 
     async function handleClose() {

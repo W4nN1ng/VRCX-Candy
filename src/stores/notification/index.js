@@ -18,6 +18,7 @@ import {
     sanitizeNotificationJson
 } from '../../shared/utils';
 import { getUserMemo } from '../../coordinators/memoCoordinator';
+import { maybeAutoAcceptRequestInvite } from '../../coordinators/autoInviteCoordinator';
 import { friendRequest, instanceRequest, notificationRequest, queryRequest } from '../../api';
 import {
     getNotificationMessage,
@@ -194,6 +195,23 @@ export const useNotificationStore = defineStore('Notification', () => {
             }
         }
         notificationTable.value.data.push(ref);
+        if (ref.type === 'requestInvite') {
+            // The Candy feature that answers a knock for you while you are asleep.
+            // Fire and forget: a slow or failed invite must never hold up the
+            // notification arriving in the list, and the manual button still works.
+            maybeAutoAcceptRequestInvite(ref)
+                .then((result) => {
+                    if (result === 'accepted') {
+                        handleNotificationHide(ref.id);
+                    }
+                })
+                // A broken auto accept must never take the notification list, or the
+                // overlay, down with it - and an unhandled rejection here would be
+                // invisible except in the log.
+                .catch((error) => {
+                    console.error('Auto invite approval failed', error);
+                });
+        }
         const D = userStore.userDialog;
         if (D.visible === false || ref.type !== 'friendRequest' || ref.senderUserId !== D.id) {
             return;

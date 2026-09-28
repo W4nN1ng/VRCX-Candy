@@ -77,6 +77,7 @@
 | `726ac41f` | 状态灯不再把离线时间算成挂灯 | 见第 5、6 节 `feed_online_offline` 一条 |
 | `07f82723` | 改版页面不再强制收起右侧好友栏 | 见第 5 节 |
 | （见面功能） | 常一起玩的好友 | `src/shared/utils/friendMeetings.js`（32 单测）+ `views/Charts/components/FriendMeetings.vue`，数据源 `gamelog_join_leave` × `gamelog_location`，见第 6 节。**顺带修掉 `getSelfLocationSegments` 把停留区间算反的 bug**（同游页受影响） |
+| （自动通过） | 自动通过加入请求 | `src/shared/utils/autoInviteRules.js`（27 单测，纯函数）+ `stores/settings/autoInviteApprovals.js` + `coordinators/autoInviteCoordinator.js`，挂在 `stores/notification/index.js` 的 `handleNotification` 上。**这是本 fork 唯一会替用户放人进房间的功能**，安全底线见下面第 5 节 |
 
 ### 节能模式的实测结论（重要，别重复踩）
 
@@ -166,6 +167,15 @@
 - **改版页面不要藏右侧好友栏。** 我原先把 `charts-friend-footprints`、`charts-friend-status-lights`、`charts-friend-together`、`candy-auto-status` 四个 key 加进了 `appearance.js` 的 `isSideBarTabShow` 黑名单，理由是"页面宽、被挤会换行"。实际代价更大：`MainLayout.vue` 里有个 `watch(isSideBarTabShow)`，一进这些路由就无条件 `asidePanelRef.collapse()`，用户每次打开都要手动把好友列表拉出来。**已经把这四个撤掉**，现在黑名单和上游一致（只有 `friends-locations`、`friend-list`、`charts-instance`、`charts-mutual`、`charts-hot-worlds`）。右侧栏的展开/收起状态本来就由 `ResizablePanelGroup` 的 `auto-save-id="vrcx-main-layout-right-sidebar"` 存进 localStorage，撤掉强制折叠之后"用户上次是开着的"会自然保留。
 - **未解决 / 未验证**：用户报告"手动拉出来以后，最小化窗口几分钟，好友列表又缩回去了"。前端没有任何 `visibilitychange` 或 resize 折叠逻辑，宿主那边的节能只调 `WasHidden()`、不改控件尺寸，所以最可能是 splitter 在窗口最小化期间按 0 宽容器重算、把 aside 算成 0 并被 auto-save 存下来。**这条只是推断，没实测。** 要验的话：用 `--debug` 启动，在最小化前后各读一次 `localStorage['vrcx-main-layout-right-sidebar']`。撤掉强制折叠之后这条路径不再是这些页面独有的，如果还复现，就说明和路由无关。
 - **`MainLayout.test.js` 里那两条好友栏测试是跑不起来的**（`SyntaxError: Need to install with app.use function`，vue-i18n 在挂载那一堆对话框时炸），属于基线失败。也就是说**好友栏折叠行为没有任何在跑的保护**，改 `isSideBarTabShow` 或 `MainLayout.vue` 的 watcher 时没有测试会拦住你。
+
+### 自动通过加入请求（本 fork 唯一"替人开门"的功能，动手前必读）
+
+- **原版那个"同意"按钮做的不是批准请求，而是反向发一张邀请。** `notification store` 的 `acceptRequestInvite(row)` 实际是：取我当前位置（`lastLocation.location`，`traveling` 时换成 `lastLocationDestination`，再兜底 `currentUser.$locationTag`）→ `queryRequest.fetch('world', {worldId})` 拿世界名 → `notificationRequest.sendInvite({instanceId: L.tag, worldId: L.tag, worldName, rsvp: true}, row.senderUserId)` → `hideNotification`。自动通过照抄这两步（`autoInviteCoordinator.js`），少一步请求就会挂在列表里或者对方收不到东西。
+- **判断类型用 `ref.type === 'requestInvite'`**，不是 `'invite'`（后者是别人邀请你去他的房间，方向相反，绝对不要自动回）。
+- 挂点在 `stores/notification/index.js` 的 `handleNotification` 里 `notificationTable.value.data.push(ref)` 之后，fire-and-forget；返回 `'accepted'` 时由 store 自己调 `handleNotificationHide(ref.id)`，协调器不 import 通知 store（避免循环依赖）。
+- **store 还没 `loaded` 时返回 skipped，不猜。** 猜"接受"会放进主人从没同意过的人，猜"拒绝"会吃掉登录后第一秒到达的请求。为此必须把 `useAutoInviteApprovalsStore()` 加进 `stores/index.js` 的 `createGlobalStores()`，让它开机就开始 load；只在页面里首次使用时才建 store 的话，第一条通知永远落在未加载状态上。
+- 三条不可配置的底线（写死在 `isOwnInviteRoom` / 引擎顺序里，别做成开关）：只在自己的 `private / friends / friends+ / invite / invite+` 房间动作（`parseLocation` 的 `userId === 我`），**public 和 group 一律不动**；同一条通知只处理一次（`claimNotification`）；同一好友 30 秒冷却 + 每日上限。
+- **默认参数 `= {}` 只挡 `undefined`，不挡 `null`。** `normalizeAutoInviteSettings(null)` 直接 `Cannot read properties of null` 崩掉，是单测抓到的。凡是吃"从存储读回来的 blob"的归一化函数，都要显式写 `input && typeof input === 'object' ? input : {}`。
 
 ---
 

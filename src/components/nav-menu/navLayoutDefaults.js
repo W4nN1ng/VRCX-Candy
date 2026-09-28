@@ -13,6 +13,7 @@ export function createBaseDefaultNavLayout(t) {
             icon: 'ri-cake-2-line',
             items: [
                 'candy-auto-status',
+                'candy-auto-invites',
                 'charts-friend-footprints',
                 'charts-friend-status-lights',
                 'charts-friend-together',
