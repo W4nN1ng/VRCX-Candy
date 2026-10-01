@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 
 import {
     buildFootprintVisits,
+    buildSelfFootprintVisits,
     footprintByDay,
     footprintGroupStats,
     footprintHeatmap,
@@ -231,5 +232,112 @@ describe('footprintTimeline and footprintByDay', () => {
         expect(days.length).toBeGreaterThanOrEqual(2);
         expect(days[0].timestamp).toBeGreaterThan(days[1].timestamp);
         expect(days[0].visits[0].name).toBe('Beta');
+    });
+});
+
+describe('buildSelfFootprintVisits', () => {
+    /**
+     * One of your own stays, as getSelfLocationSegments returns it: startAt is the
+     * enter time and endAt the leave time, except for the one still running.
+     */
+    function segment(location, offsetMs, durationMs, extra = {}) {
+        const startAt = Date.parse(at(offsetMs));
+        return {
+            location,
+            worldName: extra.worldName || '',
+            groupName: extra.groupName || '',
+            startAt,
+            endAt: startAt + (durationMs || 0),
+            open: extra.open === true
+        };
+    }
+
+    test('folds consecutive stays of the same world into one visit, summing exact durations', () => {
+        const visits = buildSelfFootprintVisits([
+            segment(WORLD_A, 0, 20 * MINUTE, { worldName: 'Alpha' }),
+            segment(WORLD_A_OTHER, 30 * MINUTE, 10 * MINUTE, { worldName: 'Alpha' }),
+            segment(WORLD_B, 60 * MINUTE, 5 * MINUTE, { worldName: 'Beta' })
+        ]);
+
+        expect(visits).toHaveLength(2);
+        expect(visits[0]).toMatchObject({
+            name: 'Alpha',
+            arrivedAt: Date.parse(at(0)),
+            leftAt: Date.parse(at(40 * MINUTE)),
+            durationMs: 30 * MINUTE,
+            durationKnown: true,
+            instanceHops: 2
+        });
+        expect(visits[1]).toMatchObject({ name: 'Beta', durationMs: 5 * MINUTE, instanceHops: 1 });
+    });
+
+    test('reports the visit you are still inside without a duration', () => {
+        const visits = buildSelfFootprintVisits([
+            segment(WORLD_A, 0, 10 * MINUTE, { worldName: 'Alpha' }),
+            segment(WORLD_B, 20 * MINUTE, 0, { worldName: 'Beta', open: true })
+        ]);
+
+        expect(visits[1]).toMatchObject({ name: 'Beta', leftAt: null, durationMs: 0, durationKnown: false });
+    });
+
+    test('treats a zero length stay that is not flagged as open the same way', () => {
+        // a crash can leave the duration unwritten on a row that is not the newest
+        const visits = buildSelfFootprintVisits([segment(WORLD_A, 0, 0, { worldName: 'Alpha' })]);
+
+        expect(visits[0]).toMatchObject({ leftAt: null, durationKnown: false });
+    });
+
+    test('ignores locations that are not a world', () => {
+        const visits = buildSelfFootprintVisits([
+            segment('offline', 0, 10 * MINUTE),
+            segment('traveling:traveling', 10 * MINUTE, 10 * MINUTE),
+            segment(WORLD_A, 20 * MINUTE, 10 * MINUTE, { worldName: 'Alpha' })
+        ]);
+
+        expect(visits.map((visit) => visit.name)).toEqual(['Alpha']);
+    });
+
+    test('emits the same fields the friend path does, so the aggregators work on both', () => {
+        const friendKeys = Object.keys(buildFootprintVisits([row(WORLD_A, 0, { worldName: 'Alpha' })])[0]).sort();
+        const selfKeys = Object.keys(
+            buildSelfFootprintVisits([segment(WORLD_A, 0, 10 * MINUTE, { worldName: 'Alpha' })])[0]
+        ).sort();
+
+        expect(selfKeys).toEqual(friendKeys);
+    });
+
+    test('sorts by arrival even when the rows come in shuffled', () => {
+        const visits = buildSelfFootprintVisits([
+            segment(WORLD_B, 2 * HOUR, 10 * MINUTE, { worldName: 'Beta' }),
+            segment(WORLD_A, 0, 10 * MINUTE, { worldName: 'Alpha' })
+        ]);
+
+        expect(visits.map((visit) => visit.name)).toEqual(['Alpha', 'Beta']);
+    });
+
+    test('carries the group name through', () => {
+        const visits = buildSelfFootprintVisits([
+            segment(WORLD_A, 0, 10 * MINUTE, { worldName: 'Alpha', groupName: 'My group' })
+        ]);
+
+        expect(visits[0].groupName).toBe('My group');
+    });
+
+    test('handles empty and hostile input', () => {
+        expect(buildSelfFootprintVisits([])).toEqual([]);
+        expect(buildSelfFootprintVisits(null)).toEqual([]);
+        expect(buildSelfFootprintVisits([null, {}, { location: WORLD_A }])).toEqual([]);
+    });
+
+    test('feeds the shared summary the same way as a friend', () => {
+        const visits = buildSelfFootprintVisits([
+            segment(WORLD_A, 0, 30 * MINUTE, { worldName: 'Alpha' }),
+            segment(WORLD_B, HOUR, 15 * MINUTE, { worldName: 'Beta' })
+        ]);
+        const summary = summarizeFootprint(visits);
+
+        expect(summary.worlds).toBe(2);
+        expect(summary.durationMs).toBe(45 * MINUTE);
+        expect(summary.knownDurationMs).toBe(45 * MINUTE);
     });
 });

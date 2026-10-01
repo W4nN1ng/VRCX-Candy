@@ -760,7 +760,8 @@
                 "row": {
                     "ongoing": "还在这里",
                     "unknown": "离线时离开"
-                }
+                },
+                "self_label": "我自己"
             },
             "friend_status_lights": {
                 "tab_label": "好友状态灯",

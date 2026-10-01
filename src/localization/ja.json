@@ -752,7 +752,8 @@
                 "row": {
                     "ongoing": "滞在中",
                     "unknown": "オフラインで離脱"
-                }
+                },
+                "self_label": "自分"
             },
             "friend_status_lights": {
                 "tab_label": "フレンドのステータス",

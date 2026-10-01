@@ -344,7 +344,8 @@
                 "row": {
                     "ongoing": "still here",
                     "unknown": "left offline"
-                }
+                },
+                "self_label": "Myself"
             },
             "friend_status_lights": {
                 "tab_label": "Status Lights",

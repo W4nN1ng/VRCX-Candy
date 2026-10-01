@@ -1437,7 +1437,10 @@ const gameLog = {
      * the current visit is not silently missing; every other unusable row is dropped.
      *
      * @param {string} [createdAfter] - ISO timestamp to start from, empty for everything.
-     * @returns {Promise<{ location: string; worldName: string; groupName: string; startAt: number; endAt: number; open?: boolean }[]>} Epoch ms ranges.
+     * @returns {Promise<
+     *     { location: string; worldName: string; groupName: string; startAt: number; endAt: number; open?: boolean }[]
+     * >}
+     *   Epoch ms ranges.
      */
     async getSelfLocationSegments(createdAfter = '') {
         const segments = [];
@@ -1474,6 +1477,39 @@ const gameLog = {
             }
         }
         return segments.filter((segment) => segment.endAt > segment.startAt);
+    },
+
+    /**
+     * How much of your own travelling is on record, in the shape the footprint
+     * candidate list uses for every other player.
+     *
+     * The friend list is built from feed_gps, which never contains you, so the "myself"
+     * row cannot come from there. Counting the same things over gamelog_location keeps
+     * the row honest - same visit count, same distinct-world count, same last-seen.
+     *
+     * @param {string} [createdAfter] - ISO timestamp to start from, empty for everything.
+     * @returns {Promise<{ visits: number; worlds: number; lastAt: string }>}
+     */
+    async getSelfGpsHistoryStats(createdAfter = '') {
+        const params = {};
+        let dateClause = '';
+        if (createdAfter) {
+            dateClause = 'WHERE created_at >= @created_after';
+            params['@created_after'] = createdAfter;
+        }
+        let stats = { visits: 0, worlds: 0, lastAt: '' };
+        await sqliteService.execute(
+            (dbRow) => {
+                stats = {
+                    visits: Number(dbRow[0]) || 0,
+                    worlds: Number(dbRow[1]) || 0,
+                    lastAt: dbRow[2] ?? ''
+                };
+            },
+            `SELECT COUNT(*), COUNT(DISTINCT world_name), MAX(created_at) FROM gamelog_location ${dateClause}`,
+            params
+        );
+        return stats;
     },
 
     /**

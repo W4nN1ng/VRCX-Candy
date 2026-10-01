@@ -121,6 +121,80 @@ function buildFootprintVisits(rows) {
 }
 
 /**
+ * Turn your own stays into the same visit records the friend path builds.
+ *
+ * Gamelog_location is better data than feed_gps, not just different: a row is written
+ * when you enter and carries the exact duration once you leave, so a stay has a real
+ * start and end instead of one inferred from when the next move happened to be
+ * recorded. Consecutive stays in the same world are still folded into one visit, so
+ * hopping between instances of one map reads the same way it does for a friend.
+ *
+ * The visit you are standing in now has no duration yet, so it is reported the same
+ * way a friend's last row is: they were seen there, and how long it ends up being is
+ * not knowable yet.
+ *
+ * @param {object[]} segments - From getSelfLocationSegments: location, worldName, groupName, startAt, endAt, open
+ * @returns {object[]} Visits, oldest first, same shape as buildFootprintVisits
+ */
+function buildSelfFootprintVisits(segments) {
+    const entries = [];
+    for (const row of segments || []) {
+        const at = Number(row?.startAt) || 0;
+        const location = String(row?.location || '');
+        if (!at || !isTrackable(location)) {
+            continue;
+        }
+        const { key, kind, worldId } = classifyLocation(location);
+        const endAt = Math.max(Number(row?.endAt) || 0, at);
+        entries.push({
+            at,
+            endAt,
+            open: row?.open === true,
+            key,
+            kind,
+            worldId,
+            location,
+            name: String(row?.worldName || ''),
+            groupName: String(row?.groupName || ''),
+            durationMs: endAt - at
+        });
+    }
+    entries.sort((a, b) => a.at - b.at);
+
+    const visits = [];
+    let index = 0;
+    while (index < entries.length) {
+        const current = entries[index];
+        let next = index + 1;
+        while (next < entries.length && entries[next].key === current.key) {
+            next++;
+        }
+        const group = entries.slice(index, next);
+        const last = group[group.length - 1];
+        // Still inside it: the duration is not finished, so it is not a number yet.
+        const open = last.open || last.endAt <= last.at;
+        const name = group.map((entry) => entry.name).find((value) => value) || '';
+        const groupName = group.map((entry) => entry.groupName).find((value) => value) || '';
+
+        visits.push({
+            key: current.key,
+            kind: current.kind,
+            worldId: current.worldId,
+            name,
+            groupName,
+            arrivedAt: current.at,
+            leftAt: open ? null : last.endAt,
+            durationMs: open ? 0 : group.reduce((total, entry) => total + entry.durationMs, 0),
+            durationKnown: !open,
+            instanceHops: group.length,
+            lastSeenAt: open ? current.at : last.endAt
+        });
+        index = next;
+    }
+    return visits;
+}
+
+/**
  * Headline numbers for the dashboard.
  *
  * @param {object[]} visits
@@ -337,6 +411,7 @@ function footprintByDay(visits, locale = undefined) {
 export {
     MAX_RELIABLE_GAP_MS,
     buildFootprintVisits,
+    buildSelfFootprintVisits,
     classifyLocation,
     footprintByDay,
     footprintGroupStats,

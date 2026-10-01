@@ -283,9 +283,10 @@
     import { showUserDialog } from '@/coordinators/userCoordinator';
     import { showWorldDialog } from '@/coordinators/worldCoordinator';
     import { database } from '@/services/database';
-    import { useFriendStore } from '@/stores';
+    import { useFriendStore, useUserStore } from '@/stores';
     import {
         buildFootprintVisits,
+        buildSelfFootprintVisits,
         footprintByDay,
         footprintGroupStats,
         footprintHeatmap,
@@ -300,7 +301,15 @@
     const { t } = useI18n();
     const route = useRoute();
     const { friends } = storeToRefs(useFriendStore());
+    const { currentUser } = storeToRefs(useUserStore());
     const { userImage, userStatusClass } = useUserDisplay();
+
+    /**
+     * Feed_gps never contains the logged-in player, so "myself" is not a candidate the
+     * friend query can produce. It is still a footprint worth looking at, so the page
+     * pins its own row on top and reads gamelog_location for it instead.
+     */
+    const selfId = computed(() => String(currentUser.value?.id || ''));
 
     const DAY_MS = 24 * 60 * 60 * 1000;
     const rangeOptions = [7, 30, 90, 0];
@@ -454,14 +463,20 @@
      * as the payloads land.
      */
     function candidateUser(candidate) {
+        if (candidate.self) {
+            return currentUser.value;
+        }
         return friends.value.get(candidate.userId)?.ref || candidate.user;
     }
 
     async function loadCandidates() {
         try {
             const since = rangeDays.value ? new Date(Date.now() - rangeDays.value * DAY_MS).toISOString() : '';
-            const rows = await database.getPlayersWithGpsHistory(since);
-            candidates.value = rows.map((row) => {
+            const [rows, selfStats] = await Promise.all([
+                database.getPlayersWithGpsHistory(since),
+                selfId.value ? database.getSelfGpsHistoryStats(since) : Promise.resolve(null)
+            ]);
+            const list = rows.map((row) => {
                 const friend = friends.value.get(row.userId);
                 return {
                     ...row,
@@ -469,6 +484,17 @@
                     displayName: friend?.ref?.displayName || friend?.name || row.displayName || row.userId
                 };
             });
+            if (selfId.value) {
+                list.unshift({
+                    userId: selfId.value,
+                    displayName: t('view.charts.friend_footprints.self_label'),
+                    visits: selfStats?.visits || 0,
+                    worlds: selfStats?.worlds || 0,
+                    lastAt: selfStats?.lastAt || '',
+                    self: true
+                });
+            }
+            candidates.value = list;
         } catch (error) {
             console.error('Failed to load footprint candidates', error);
             candidates.value = [];
@@ -484,12 +510,15 @@
         loading.value = true;
         try {
             const since = rangeDays.value ? new Date(Date.now() - rangeDays.value * DAY_MS).toISOString() : '';
-            const rows = await database.getGpsRowsForUserId(userId, since);
+            const isSelf = userId === selfId.value;
+            const built = isSelf
+                ? buildSelfFootprintVisits(await database.getSelfLocationSegments(since))
+                : buildFootprintVisits(await database.getGpsRowsForUserId(userId, since));
             // the dialog may have moved on to another friend while we waited
             if (selectedId.value !== userId) {
                 return;
             }
-            visits.value = buildFootprintVisits(rows);
+            visits.value = built;
         } catch (error) {
             console.error('Failed to load footprint', error);
             if (selectedId.value === userId) {
@@ -511,6 +540,14 @@
         }
     );
 
+    // The logged-in user arrives after the first candidate load on a cold start, so
+    // without this the "myself" row would only appear once something else refreshed.
+    watch(selfId, (id, previous) => {
+        if (id && id !== previous) {
+            loadCandidates();
+        }
+    });
+
     onMounted(async () => {
         await loadCandidates();
         const wanted = String(route.query.user || '');
@@ -519,7 +556,11 @@
             return;
         }
         if (!selectedId.value && candidates.value.length) {
-            selectedId.value = candidates.value[0].userId;
+            // The page is called "friend footprints", so opening it should still land on
+            // a friend. "Myself" sits at the top of the list to be clicked, not to be
+            // the surprise default.
+            const firstFriend = candidates.value.find((candidate) => !candidate.self);
+            selectedId.value = (firstFriend || candidates.value[0]).userId;
             loadVisits();
         }
     });

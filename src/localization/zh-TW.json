@@ -748,7 +748,8 @@
                 "row": {
                     "ongoing": "還在這裡",
                     "unknown": "離線時離開"
-                }
+                },
+                "self_label": "我自己"
             },
             "friend_status_lights": {
                 "tab_label": "好友狀態燈",

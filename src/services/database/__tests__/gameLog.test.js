@@ -130,6 +130,47 @@ describe('gameLog.getSelfLocationSegments', () => {
     });
 });
 
+describe('gameLog.getSelfGpsHistoryStats', () => {
+    beforeEach(() => {
+        mocks.execute.mockReset();
+    });
+
+    test('counts your own travelling in the shape the candidate list uses', async () => {
+        mocks.execute.mockImplementation(async (callback) => {
+            callback([576, 116, '2026-09-25T07:16:02.000Z']);
+            return undefined;
+        });
+
+        expect(await gameLog.getSelfGpsHistoryStats()).toEqual({
+            visits: 576,
+            worlds: 116,
+            lastAt: '2026-09-25T07:16:02.000Z'
+        });
+        const sql = mocks.execute.mock.calls[0][1];
+        expect(sql).toContain('gamelog_location');
+        expect(sql).toContain('COUNT(DISTINCT world_name)');
+        expect(sql).not.toContain('WHERE');
+    });
+
+    test('adds the date filter only when a start date is given', async () => {
+        mocks.execute.mockImplementation(async () => undefined);
+
+        await gameLog.getSelfGpsHistoryStats('2026-09-01T00:00:00.000Z');
+
+        expect(mocks.execute.mock.calls[0][1]).toContain('WHERE created_at >= @created_after');
+        expect(mocks.execute.mock.calls[0][2]).toMatchObject({ '@created_after': '2026-09-01T00:00:00.000Z' });
+    });
+
+    test('falls back to zeroes when nothing was recorded', async () => {
+        mocks.execute.mockImplementation(async (callback) => {
+            callback([null, null, null]);
+            return undefined;
+        });
+
+        expect(await gameLog.getSelfGpsHistoryStats()).toEqual({ visits: 0, worlds: 0, lastAt: '' });
+    });
+});
+
 describe('gameLog.getFriendPresenceRows', () => {
     beforeEach(() => {
         mocks.execute.mockReset();
