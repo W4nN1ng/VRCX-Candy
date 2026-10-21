@@ -363,7 +363,7 @@
 
     import { showUserDialog } from '@/coordinators/userCoordinator';
     import { showWorldDialog } from '@/coordinators/worldCoordinator';
-    import { useAppearanceSettingsStore, useFriendStore } from '@/stores';
+    import { useAppearanceSettingsStore, useFriendStore, useHiddenFriendsStore } from '@/stores';
     import { useUserDisplay } from '@/composables/useUserDisplay';
     import { database } from '@/services/database';
     import {
@@ -386,7 +386,8 @@
 
     const { t } = useI18n();
     const { userImage, userStatusClass } = useUserDisplay();
-    const { friends } = storeToRefs(useFriendStore());
+    const { friends, visibleSortedFriends } = storeToRefs(useFriendStore());
+    const hiddenFriendsStore = useHiddenFriendsStore();
     const { isDarkMode } = storeToRefs(useAppearanceSettingsStore());
 
     const HOUR_MS = 60 * 60 * 1000;
@@ -412,8 +413,14 @@
         });
     });
 
-    /** The roster, read lazily so the two-pass friend load cannot freeze it. */
-    const friendIds = computed(() => new Set(friends.value.keys()));
+    /**
+     * The roster, read lazily so the two-pass friend load cannot freeze it.
+     *
+     * This is the whitelist the stays are built from, so leaving the hidden friends out
+     * here takes them out of every number on the page - the ranking, the line chart, the
+     * world board and the heatmap - in one place rather than six.
+     */
+    const friendIds = computed(() => new Set(visibleSortedFriends.value.map((friend) => friend.id)));
 
     /** Everything inside the chosen range, so the range buttons change the whole page. */
     const rangeMeetings = computed(() => {
@@ -740,6 +747,15 @@
 
     watch([metric, focusId, rangeMeetings], renderChart);
     watch(isDarkMode, renderChart);
+
+    // The stays are built from the visible roster, so a hide or an unhide has to pull
+    // the numbers again - none of the other watchers here would notice.
+    watch(
+        () => hiddenFriendsStore.count,
+        () => {
+            loadData();
+        }
+    );
 
     onMounted(loadData);
     onBeforeUnmount(disposeChart);

@@ -11,6 +11,7 @@ import {
     createDefaultNotificationRef,
     createDefaultNotificationV2Ref,
     executeWithBackoff,
+    filterHiddenRows,
     findUserByDisplayName,
     parseLocation,
     parseNotificationDetails,
@@ -36,6 +37,7 @@ import { useFriendStore } from '../friend';
 import { handleFriendAdd } from '../../coordinators/friendRelationshipCoordinator';
 import { useGameStore } from '../game';
 import { useGeneralSettingsStore } from '../settings/general';
+import { useHiddenFriendsStore } from '../settings/hiddenFriends';
 
 import { showGroupDialog } from '../../coordinators/groupCoordinator';
 import { showUserDialog } from '../../coordinators/userCoordinator';
@@ -67,6 +69,7 @@ export const useNotificationStore = defineStore('Notification', () => {
     const sharedFeedStore = useSharedFeedStore();
     const instanceStore = useInstanceStore();
     const modalStore = useModalStore();
+    const hiddenFriendsStore = useHiddenFriendsStore();
 
     const notificationInitStatus = ref(false);
     const notificationTable = ref({
@@ -91,14 +94,31 @@ export const useNotificationStore = defineStore('Notification', () => {
     const isNotificationsLoading = ref(false);
     const isNotificationCenterOpen = ref(false);
 
+    // The three lists every notification surface is built from, so this is where a
+    // hidden friend stops existing on screen. notificationTable.value.data itself keeps
+    // their rows: the id lookups that mark things seen, dedupe and act on a notification
+    // all run against it, and the SQLite table keeps everything, so unhiding a person
+    // shows the whole period they were hidden.
     const friendNotifications = computed(() =>
-        notificationTable.value.data.filter((n) => getNotificationCategory(n.type) === 'friend')
+        filterHiddenRows(
+            notificationTable.value.data.filter((n) => getNotificationCategory(n.type) === 'friend'),
+            (n) => n.senderUserId,
+            hiddenFriendsStore.hiddenIds
+        )
     );
     const groupNotifications = computed(() =>
-        notificationTable.value.data.filter((n) => getNotificationCategory(n.type) === 'group')
+        filterHiddenRows(
+            notificationTable.value.data.filter((n) => getNotificationCategory(n.type) === 'group'),
+            (n) => n.senderUserId,
+            hiddenFriendsStore.hiddenIds
+        )
     );
     const otherNotifications = computed(() =>
-        notificationTable.value.data.filter((n) => getNotificationCategory(n.type) === 'other')
+        filterHiddenRows(
+            notificationTable.value.data.filter((n) => getNotificationCategory(n.type) === 'other'),
+            (n) => n.senderUserId,
+            hiddenFriendsStore.hiddenIds
+        )
     );
     const unseenSet = computed(() => new Set(unseenNotifications.value));
     const unseenFriendNotifications = computed(() =>
@@ -122,7 +142,15 @@ export const useNotificationStore = defineStore('Notification', () => {
             (n) => !unseenSet.value.has(n.id) && n.seen !== false && getNotificationTs(n) > recentCutoff.value
         )
     );
-    const hasUnseenNotifications = computed(() => unseenNotifications.value.length > 0);
+    // Counted from the three visible lists rather than the raw unseen ids, so the dot
+    // on the sidebar tab can never be lighting up for somebody you asked not to see.
+    const hasUnseenNotifications = computed(
+        () =>
+            unseenFriendNotifications.value.length +
+                unseenGroupNotifications.value.length +
+                unseenOtherNotifications.value.length >
+            0
+    );
 
     const notyMap = {};
 
@@ -176,7 +204,10 @@ export const useNotificationStore = defineStore('Notification', () => {
             if (!isExcludedType) {
                 database.addNotificationToDatabase(ref);
             }
-            if (isNotificationInitReady) {
+            // The write above happens whatever the hidden list says - that is the whole
+            // point of hiding instead of deleting. Only the announcing is skipped.
+            const isHiddenSender = hiddenFriendsStore.isHidden(ref.senderUserId);
+            if (isNotificationInitReady && !isHiddenSender) {
                 if (ref.details?.worldId && !instanceStore.cachedInstances.has(ref.details.worldId)) {
                     // get instance name for invite
                     const L = parseLocation(ref.details.worldId);
@@ -190,7 +221,7 @@ export const useNotificationStore = defineStore('Notification', () => {
                 queueNotificationNoty(ref);
                 sharedFeedStore.addEntry(ref);
             }
-            if (matchesNotificationTypeFilter && !isExcludedType) {
+            if (matchesNotificationTypeFilter && !isExcludedType && !isHiddenSender) {
                 uiStore.notifyMenu('notification');
             }
         }
@@ -580,13 +611,18 @@ export const useNotificationStore = defineStore('Notification', () => {
         const matchesNotificationTypeFilter =
             notificationTable.value.filters[0].value.length === 0 ||
             notificationTable.value.filters[0].value.includes(ref.type);
-        if (isNotificationInitReady && matchesNotificationTypeFilter) {
+        // Same rule as handleNotification: the row is stored and pushed whatever the
+        // hidden list says, only the toast, the sound and the unread dot are skipped.
+        const isHiddenSender = hiddenFriendsStore.isHidden(ref.senderUserId);
+        if (isNotificationInitReady && matchesNotificationTypeFilter && !isHiddenSender) {
             uiStore.notifyMenu('notification');
         }
         database.addNotificationV2ToDatabase(ref);
         notificationTable.value.data.push(ref);
-        queueNotificationNoty(ref);
-        sharedFeedStore.addEntry(ref);
+        if (!isHiddenSender) {
+            queueNotificationNoty(ref);
+            sharedFeedStore.addEntry(ref);
+        }
     }
 
     /**
@@ -756,6 +792,12 @@ export const useNotificationStore = defineStore('Notification', () => {
      */
     function playNoty(noty) {
         if (userStore.currentUser.status === 'busy' || !watchState.isFriendsLoaded) {
+            return;
+        }
+        // No toast, no sound, no speech for a hidden friend. This guard is at the door
+        // rather than only at the two notification handlers because the noty queue is
+        // also fed by the game log and the feed, which are separate paths.
+        if (hiddenFriendsStore.isHidden(getUserIdFromNoty(noty))) {
             return;
         }
         let displayName = '';

@@ -16,6 +16,8 @@ const testDefinitions = [
     { key: 'charts-friend-meetings', routeName: 'charts-friend-meetings' },
     { key: 'candy-auto-status', routeName: 'candy-auto-status' },
     { key: 'candy-auto-invites', routeName: 'candy-auto-invites' },
+    { key: 'candy-hidden-friends', routeName: 'candy-hidden-friends' },
+    { key: 'candy-room-mutuals', routeName: 'candy-room-mutuals' },
     { key: 'notification', routeName: 'notification' },
     { key: 'direct-access', action: 'direct-access' }
 ];

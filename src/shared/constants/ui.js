@@ -142,6 +142,20 @@ const navDefinitions = [
         routeName: 'candy-auto-invites'
     },
     {
+        key: 'candy-hidden-friends',
+        icon: 'ri-eye-off-line',
+        tooltip: 'view.candy.hidden_friends.tab_label',
+        labelKey: 'view.candy.hidden_friends.tab_label',
+        routeName: 'candy-hidden-friends'
+    },
+    {
+        key: 'candy-room-mutuals',
+        icon: 'ri-user-shared-line',
+        tooltip: 'view.candy.room_mutuals.tab_label',
+        labelKey: 'view.candy.room_mutuals.tab_label',
+        routeName: 'candy-room-mutuals'
+    },
+    {
         key: 'charts-friend-together',
         icon: 'ri-group-line',
         tooltip: 'view.charts.friend_together.tab_label',

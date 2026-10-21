@@ -203,7 +203,7 @@
 </template>
 
 <script setup>
-    import { computed, onMounted, ref } from 'vue';
+    import { computed, onMounted, ref, watch } from 'vue';
     import { Info, RefreshCcw, User, Users } from 'lucide-vue-next';
     import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
     import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
@@ -217,9 +217,10 @@
     import { showUserDialog } from '@/coordinators/userCoordinator';
     import { showWorldDialog } from '@/coordinators/worldCoordinator';
     import { database } from '@/services/database';
-    import { useFriendStore, useUserStore } from '@/stores';
+    import { useFriendStore, useHiddenFriendsStore, useUserStore } from '@/stores';
     import {
         buildTogetherEvents,
+        filterHiddenRows,
         formatDateFilter,
         summarizeTogether,
         timeToText,
@@ -230,6 +231,7 @@
 
     const { t } = useI18n();
     const { friends } = storeToRefs(useFriendStore());
+    const hiddenFriendsStore = useHiddenFriendsStore();
     const { currentUser } = storeToRefs(useUserStore());
     const { userImage } = useUserDisplay();
 
@@ -367,7 +369,9 @@
                 const sessions = await database.getActivitySessionsV2(currentUser.value.id);
                 selfSessions = sessions.map((session) => ({ startAt: session.start, endAt: session.end }));
             }
-            allEvents.value = buildTogetherEvents({ friendRows, selfSegments, selfSessions });
+            // A hidden friend is not in the timeline at all, not even as "they were somewhere".
+            const visibleFriendRows = filterHiddenRows(friendRows, (row) => row.userId, hiddenFriendsStore.hiddenIds);
+            allEvents.value = buildTogetherEvents({ friendRows: visibleFriendRows, selfSegments, selfSessions });
         } catch (error) {
             console.error('Failed to load friend together events', error);
             allEvents.value = [];
@@ -375,6 +379,14 @@
             loading.value = false;
         }
     }
+
+    // Reload on demand: the rows come from a query, so no roster watcher sees this.
+    watch(
+        () => hiddenFriendsStore.count,
+        () => {
+            loadEvents();
+        }
+    );
 
     onMounted(loadEvents);
 </script>

@@ -283,7 +283,7 @@
     import { showUserDialog } from '@/coordinators/userCoordinator';
     import { showWorldDialog } from '@/coordinators/worldCoordinator';
     import { database } from '@/services/database';
-    import { useFriendStore, useUserStore } from '@/stores';
+    import { useFriendStore, useHiddenFriendsStore, useUserStore } from '@/stores';
     import {
         buildFootprintVisits,
         buildSelfFootprintVisits,
@@ -301,6 +301,7 @@
     const { t } = useI18n();
     const route = useRoute();
     const { friends } = storeToRefs(useFriendStore());
+    const hiddenFriendsStore = useHiddenFriendsStore();
     const { currentUser } = storeToRefs(useUserStore());
     const { userImage, userStatusClass } = useUserDisplay();
 
@@ -476,18 +477,20 @@
                 database.getPlayersWithGpsHistory(since),
                 selfId.value ? database.getSelfGpsHistoryStats(since) : Promise.resolve(null)
             ]);
-            const list = rows.map((row) => {
-                const friend = friends.value.get(row.userId);
-                return {
-                    ...row,
-                    user: friend?.ref || { id: row.userId, displayName: row.displayName },
-                    displayName: friend?.ref?.displayName || friend?.name || row.displayName || row.userId
-                };
-            });
+            const list = rows
+                .filter((row) => !hiddenFriendsStore.isHidden(row.userId))
+                .map((row) => {
+                    const friend = friends.value.get(row.userId);
+                    return {
+                        ...row,
+                        user: friend?.ref || { id: row.userId, displayName: row.displayName },
+                        displayName: friend?.ref?.displayName || friend?.name || row.displayName || row.userId
+                    };
+                });
             if (selfId.value) {
                 list.unshift({
                     userId: selfId.value,
-                    displayName: t('view.charts.friend_footprints.self_label'),
+                    displayName: currentUser.value?.displayName || currentUser.value?.name || selfId.value,
                     visits: selfStats?.visits || 0,
                     worlds: selfStats?.worlds || 0,
                     lastAt: selfStats?.lastAt || '',
@@ -537,6 +540,15 @@
             if (!candidates.value.length) {
                 loadCandidates();
             }
+        }
+    );
+
+    // The candidate list comes from a query rather than from the roster, so the roster
+    // watchers above never see the hidden list change.
+    watch(
+        () => hiddenFriendsStore.count,
+        () => {
+            loadCandidates();
         }
     );
 

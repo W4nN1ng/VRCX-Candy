@@ -52,7 +52,8 @@ export const createColumns = ({
     onBlockChatbox,
     onUnblockChatbox,
     sortAlphabetically,
-    userImage
+    userImage,
+    mutualCountFor
 }) => {
     const cols = [
         {
@@ -112,6 +113,28 @@ export const createColumns = ({
                 const userRef = row.original?.ref;
                 const style = randomUserColours?.value ? { color: userRef?.$userColour } : null;
                 return <span style={style}>{userRef?.displayName ?? ''}</span>;
+            }
+        },
+        {
+            // Shared friends with you, from the same lookups the Candy page drives - one
+            // room costs one set of requests, not two. null means there is nothing true
+            // to print, so the cell stays empty rather than showing a zero.
+            id: 'sharedFriends',
+            accessorFn: (row) => (mutualCountFor ? mutualCountFor(row?.ref?.id) : null),
+            header: ({ column }) =>
+                sortButton({
+                    column,
+                    label: () => t('table.playerList.shared_friends'),
+                    descFirst: true
+                }),
+            size: 80,
+            meta: { label: () => t('table.playerList.shared_friends') },
+            sortingFn: (rowA, rowB) =>
+                (mutualCountFor?.(rowA.original?.ref?.id) ?? -1) - (mutualCountFor?.(rowB.original?.ref?.id) ?? -1),
+            cell: ({ row }) => {
+                const count = mutualCountFor ? mutualCountFor(row.original?.ref?.id) : null;
+                if (count === null || count === undefined) return null;
+                return <span class="text-xs">{count}</span>;
             }
         },
         {

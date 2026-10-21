@@ -20,6 +20,8 @@ import { useGameStore } from './game';
 import { useGeneralSettingsStore } from './settings/general';
 import { useAutoStatusRulesStore } from './settings/autoStatusRules';
 import { useAutoInviteApprovalsStore } from './settings/autoInviteApprovals';
+import { useHiddenFriendsStore } from './settings/hiddenFriends';
+import { useRoomMutualsStore } from './settings/roomMutuals';
 import { useQuickSearchStore } from './quickSearch';
 import { useGroupStore } from './group';
 import { useInstanceStore } from './instance';
@@ -131,6 +133,15 @@ export function createGlobalStores() {
         // Created at startup so its settings have come back from storage before the
         // first notification can arrive - the auto accept guard reads that flag.
         autoInviteApprovals: useAutoInviteApprovalsStore(),
+        // Created at startup so the read is already in flight when the sidebar first
+        // renders. The filter itself is reactive, so the worst case is that a hidden
+        // friend appears for the moment it takes to come back from SQLite - which is
+        // the same window every other setting here has.
+        hiddenFriends: useHiddenFriendsStore(),
+        // Built at startup because the room scan has to be running before you walk
+        // somewhere - the whole point is that the list is already filled in when the
+        // page is opened.
+        roomMutuals: useRoomMutualsStore(),
         notificationsSettings: useNotificationsSettingsStore(),
         wristOverlaySettings: useWristOverlaySettingsStore(),
         avatarProvider: useAvatarProviderStore(),
@@ -198,6 +209,8 @@ export {
     useGeneralSettingsStore,
     useAutoStatusRulesStore,
     useAutoInviteApprovalsStore,
+    useHiddenFriendsStore,
+    useRoomMutualsStore,
     useNotificationsSettingsStore,
     useWristOverlaySettingsStore,
     useToolsStore,

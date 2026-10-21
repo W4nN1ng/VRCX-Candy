@@ -14,6 +14,7 @@ import {
     isRealInstance,
     parseLocation,
     sanitizeUserJson,
+    selfStatusChangeRow,
     getReadableProfileThemeColor
 } from '../shared/utils';
 import { getUserMemo } from './memoCoordinator';
@@ -59,6 +60,39 @@ import { useUiStore } from '../stores/ui';
 import { useUserStore } from '../stores/user';
 
 const getRobotUrl = () => `${AppDebug.endpointDomain}/file/file_0e8c4e32-7444-44ea-ade4-313c010d4bae/1/file`;
+
+// What this session last wrote to feed_status for the logged-in user. Kept here rather
+// than read back off currentUser.status, because applyUser only copies the light across
+// and not the signature - without a memory of its own, a description-only change would
+// look like it had never been recorded and would be written again on every refresh.
+let lastRecordedSelfStatus = null;
+
+/**
+ * Keep a history of the user's own status light.
+ *
+ * The activity feed never contains the logged-in player, so feed_status holds almost no
+ * rows for yourself and the status light page has nothing of yours to draw. This is
+ * called from the two places where VRCX genuinely learns its own status: a write it made
+ * itself, and a user object that came back containing itself.
+ *
+ * @param {string} userId
+ * @param {{ status?: string; statusDescription?: string } | null} before - What was believed just before
+ * @param {object | null} after - What was just learned
+ */
+function recordSelfStatusChange(userId, before, after) {
+    const row = selfStatusChangeRow({
+        userId,
+        displayName: after?.displayName ?? '',
+        before: lastRecordedSelfStatus ?? before,
+        after,
+        at: new Date().toJSON()
+    });
+    if (!row) {
+        return;
+    }
+    lastRecordedSelfStatus = { status: row.status, statusDescription: row.statusDescription };
+    database.addStatusToDatabase(row);
+}
 
 /**
  * @param {import('../types/api/user').GetUserResponse} json
@@ -193,6 +227,10 @@ export function applyUser(json) {
     }
     if (ref.id === currentUser.id) {
         if (ref.status) {
+            // A light VRCX did not put there - changed in the VR menu, on the website,
+            // or from the other device. Recorded before the store is updated, because
+            // after it there is no "previous" left to write.
+            recordSelfStatusChange(currentUser.id, currentUser, ref);
             currentUser.status = ref.status;
         }
         runUpdateCurrentUserLocationFlow();
@@ -707,11 +745,16 @@ export function applyCurrentUser(json) {
         isLoggedIn: watchState.isLoggedIn
     });
     if (watchState.isLoggedIn) {
+        // Snapshot before the copy below, which overwrites the old light in place.
+        const beforeSelfStatus = { status: ref.status, statusDescription: ref.statusDescription };
         for (const prop in json) {
             if (typeof json[prop] !== 'undefined') {
                 ref[prop] = json[prop];
             }
         }
+        // Covers every status VRCX changed on the user's behalf: the automatic status
+        // rules, the wrist/sidebar status presets, and the edit-profile dialog.
+        recordSelfStatusChange(ref.id, beforeSelfStatus, ref);
     } else {
         ref = /** @type {import('../types/api/user').VrcxCurrentUser} */ ({
             acceptedPrivacyVersion: 0,

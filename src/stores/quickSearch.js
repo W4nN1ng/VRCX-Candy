@@ -1,6 +1,7 @@
 import { computed, effectScope, ref, watch } from 'vue';
 import { defineStore } from 'pinia';
 import { useFriendStore } from './friend';
+import { useHiddenFriendsStore } from './settings/hiddenFriends';
 import { useSearchIndexStore } from './searchIndex';
 import { useUserStore } from './user';
 import { showGroupDialog } from '../coordinators/groupCoordinator';
@@ -14,6 +15,7 @@ export const useQuickSearchStore = defineStore('QuickSearch', () => {
     const friendStore = useFriendStore();
     const userStore = useUserStore();
     const searchIndexStore = useSearchIndexStore();
+    const hiddenFriendsStore = useHiddenFriendsStore();
 
     const isOpen = ref(false);
     const query = ref('');
@@ -154,10 +156,14 @@ export const useQuickSearchStore = defineStore('QuickSearch', () => {
 
             // Enrich friend results with reactive ref from store
             // (Worker can't serialize Vue reactive objects)
-            friendResults.value = payload.friends.map((item) => {
-                const friendEntry = friendStore.friends.get(item.id);
-                return { ...item, ref: friendEntry?.ref };
-            });
+            // The index keeps hidden friends so unhiding needs no re-sync; the results
+            // handed to the picker leave them out.
+            friendResults.value = payload.friends
+                .filter((item) => !hiddenFriendsStore.isHidden(item.id))
+                .map((item) => {
+                    const friendEntry = friendStore.friends.get(item.id);
+                    return { ...item, ref: friendEntry?.ref };
+                });
             ownAvatarResults.value = payload.ownAvatars;
             favoriteAvatarResults.value = payload.favAvatars;
             ownWorldResults.value = payload.ownWorlds;

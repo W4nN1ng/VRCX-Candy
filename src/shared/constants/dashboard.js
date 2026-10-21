@@ -14,5 +14,7 @@ export const DASHBOARD_BLOCKED_PANEL_KEYS = new Set([
     'charts-friend-meetings',
     'candy-auto-status',
     'candy-auto-invites',
+    'candy-hidden-friends',
+    'candy-room-mutuals',
     'tools'
 ]);

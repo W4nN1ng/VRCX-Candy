@@ -195,6 +195,7 @@
         useInstanceStore,
         useLocationStore,
         usePhotonStore,
+        useRoomMutualsStore,
         useUserStore
     } from '../../stores';
     import { commaNumber, formatDateFilter } from '../../shared/utils';
@@ -218,6 +219,7 @@
     const { saveChatboxUserBlacklist } = photonStore;
 
     const { lastLocation } = storeToRefs(useLocationStore());
+    const roomMutualsStore = useRoomMutualsStore();
     const { currentInstanceLocation, currentInstanceWorld, currentInstanceUsersData } = storeToRefs(useInstanceStore());
 
     const worldImageError = ref(false);
@@ -294,6 +296,7 @@
     const playerListColumns = computed(() =>
         createColumns({
             randomUserColours,
+            mutualCountFor: (userId) => roomMutualsStore.countFor(userId),
             chatboxUserBlacklist,
             onBlockChatbox: addChatboxUserBlacklist,
             onUnblockChatbox: deleteChatboxUserBlacklist,

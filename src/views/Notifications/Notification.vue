@@ -103,12 +103,13 @@
     import {
         useAppearanceSettingsStore,
         useGalleryStore,
+        useHiddenFriendsStore,
         useInviteStore,
         useNotificationStore,
         useVrcxStore
     } from '../../stores';
     import { DataTableLayout } from '../../components/ui/data-table';
-    import { convertFileUrlToImageUrl } from '../../shared/utils';
+    import { convertFileUrlToImageUrl, filterHiddenRows } from '../../shared/utils';
     import { createColumns } from './columns.jsx';
     import { useVrcxVueTable } from '../../lib/table/useVrcxVueTable';
 
@@ -119,6 +120,7 @@
     const { refreshInviteMessageTableData } = useInviteStore();
     const { clearInviteImageUpload } = useGalleryStore();
     const { notificationTable, isNotificationsLoading } = storeToRefs(useNotificationStore());
+    const hiddenFriendsStore = useHiddenFriendsStore();
     const {
         refreshNotifications,
         acceptFriendRequestNotification,
@@ -186,14 +188,17 @@
 
     const notificationDisplayData = computed(() => {
         const rawData = asRawArray(notificationTable.value.data);
+        // Same rule as the sidebar: the table's own data keeps the hidden friend's
+        // rows, so the actions on them still resolve and unhiding shows everything.
+        const visibleData = filterHiddenRows(rawData, (row) => row.senderUserId, hiddenFriendsStore.hiddenIds);
         const rawFilters = Array.isArray(notificationTable.value.filters) ? notificationTable.value.filters : [];
         const activeFilters = rawFilters.filter((filter) => !isEmptyFilterValue(filter?.value));
 
         if (activeFilters.length === 0) {
-            return rawData.slice();
+            return visibleData.slice();
         }
 
-        return rawData.filter((row) => {
+        return visibleData.filter((row) => {
             for (const filter of activeFilters) {
                 if (filter.filterFn) {
                     if (!filter.filterFn(row, filter)) {

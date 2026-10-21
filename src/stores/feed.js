@@ -2,7 +2,9 @@ import { ref, shallowRef, watch } from 'vue';
 import { defineStore } from 'pinia';
 
 import { database } from '../services/database';
+import { filterHiddenRows } from '../shared/utils';
 import { useFriendStore } from './friend';
+import { useHiddenFriendsStore } from './settings/hiddenFriends';
 import { useVrcxStore } from './vrcx';
 import { watchState } from '../services/watchState';
 
@@ -10,6 +12,7 @@ import configRepository from '../services/config';
 
 export const useFeedStore = defineStore('Feed', () => {
     const friendStore = useFriendStore();
+    const hiddenFriendsStore = useHiddenFriendsStore();
     const vrcxStore = useVrcxStore();
 
     const feedTableData = shallowRef([]);
@@ -144,7 +147,12 @@ export const useFeedStore = defineStore('Feed', () => {
                       )
                     : await database.lookupFeedDatabase(feedTable.value.filter, vipList);
             feedTableData.value = [];
-            feedTableData.value = [...feedTableData.value, ...rows];
+            // Read side only: the feed table in SQLite keeps every row, so this is the
+            // same kind of filter as the sidebar list and unhiding shows everything.
+            feedTableData.value = [
+                ...feedTableData.value,
+                ...filterHiddenRows(rows, (row) => row.userId, hiddenFriendsStore.hiddenIds)
+            ];
         } finally {
             feedTable.value.loading = false;
         }
@@ -157,6 +165,9 @@ export const useFeedStore = defineStore('Feed', () => {
      * @param {object} feed The feed entry to add.
      */
     function addFeedEntry(feed) {
+        if (hiddenFriendsStore.isHidden(feed.userId)) {
+            return;
+        }
         if (feedTable.value.filter.length > 0 && !feedTable.value.filter.includes(feed.type)) {
             return;
         }
@@ -182,6 +193,18 @@ export const useFeedStore = defineStore('Feed', () => {
             feedTableData.value = feedTableData.value.slice(0, -50);
         }
     }
+
+    // Hiding somebody does not touch the roster or the route, so the open feed table
+    // would keep their rows until the page was re-entered. Only reload when there is a
+    // table to reload.
+    watch(
+        () => hiddenFriendsStore.count,
+        () => {
+            if (watchState.isLoggedIn && feedTableData.value.length > 0) {
+                initFeedTable();
+            }
+        }
+    );
 
     async function initFeedTable() {
         feedTable.value.loading = true;

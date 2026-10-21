@@ -396,7 +396,7 @@
     import { useUserDisplay } from '@/composables/useUserDisplay';
     import { showUserDialog } from '@/coordinators/userCoordinator';
     import { database } from '@/services/database';
-    import { useFriendStore } from '@/stores';
+    import { useFriendStore, useHiddenFriendsStore, useUserStore } from '@/stores';
     import {
         STATUS_LIGHT_META,
         buildStatusIntervals,
@@ -404,6 +404,7 @@
         statusDescriptionChanges,
         statusLightDays,
         statusLightHours,
+        selfPresenceRowsFromSessions,
         statusLightShares,
         summarizeStatusLights,
         timeAgo,
@@ -415,7 +416,16 @@
     const { t } = useI18n();
     const route = useRoute();
     const { friends } = storeToRefs(useFriendStore());
+    const hiddenFriendsStore = useHiddenFriendsStore();
+    const { currentUser } = storeToRefs(useUserStore());
     const { userImage, userStatusClass } = useUserDisplay();
+
+    /**
+     * The logged-in player is not in the friend table, so 'myself' has to be resolved
+     * from the current user record instead.
+     */
+    const selfId = computed(() => String(currentUser.value?.id || ''));
+    const selfName = computed(() => currentUser.value?.displayName || currentUser.value?.name || selfId.value);
 
     const DAY_MS = 24 * 60 * 60 * 1000;
     const MINUTES_PER_DAY = 24 * 60;
@@ -723,6 +733,9 @@
      * as the payloads land.
      */
     function candidateUser(candidate) {
+        if (candidate.userId === selfId.value) {
+            return currentUser.value;
+        }
         return friends.value.get(candidate.userId)?.ref || candidate.user;
     }
 
@@ -730,14 +743,31 @@
         try {
             const since = rangeDays.value ? new Date(Date.now() - rangeDays.value * DAY_MS).toISOString() : '';
             const rows = await database.getPlayersWithStatusHistory(since);
-            candidates.value = rows.map((row) => {
-                const friend = friends.value.get(row.userId);
-                return {
-                    ...row,
-                    user: friend?.ref || { id: row.userId, displayName: row.displayName },
-                    displayName: friend?.ref?.displayName || friend?.name || row.displayName || row.userId
-                };
-            });
+            const list = rows
+                .filter((row) => !hiddenFriendsStore.isHidden(row.userId))
+                .map((row) => {
+                    const friend = friends.value.get(row.userId);
+                    return {
+                        ...row,
+                        user: friend?.ref || { id: row.userId, displayName: row.displayName },
+                        displayName: friend?.ref?.displayName || friend?.name || row.displayName || row.userId
+                    };
+                });
+            // Yourself is pinned on top whether or not the query found a row, the same
+            // way the footprint page pins you. Without this the entry would simply be
+            // missing on a short range, and the history only starts accumulating from
+            // the build that records your own light - the feed never contained you.
+            const own = list.find((row) => row.userId === selfId.value);
+            const withoutSelf = list.filter((row) => row.userId !== selfId.value);
+            if (selfId.value) {
+                withoutSelf.unshift({
+                    ...(own || { changes: 0, lastAt: '' }),
+                    userId: selfId.value,
+                    displayName: selfName.value,
+                    user: currentUser.value
+                });
+            }
+            candidates.value = withoutSelf;
         } catch (error) {
             console.error('Failed to load status light candidates', error);
             candidates.value = [];
@@ -754,9 +784,19 @@
         loading.value = true;
         try {
             const since = rangeDays.value ? new Date(Date.now() - rangeDays.value * DAY_MS).toISOString() : '';
+            const isSelf = userId === selfId.value;
             const [statuses, presences] = await Promise.all([
                 database.getStatusRowsForUserId(userId, since),
-                database.getPresenceRowsForUserId(userId, since)
+                // feed_online_offline has no rows for yourself - the feed never contains
+                // the logged-in player - so your own online windows come from the
+                // activity sessions instead. Presence is what decides whether a light
+                // was actually worn, so skipping it would count every offline hour as a
+                // lit one, which is the exact bug this page used to have for friends.
+                isSelf
+                    ? database
+                          .getActivitySessionsV2(userId)
+                          .then((sessions) => selfPresenceRowsFromSessions(sessions, since))
+                    : database.getPresenceRowsForUserId(userId, since)
             ]);
             // the left column may have moved on to another friend while we waited
             if (selectedId.value !== userId) {
@@ -786,6 +826,15 @@
         }
     );
 
+    // The candidate list comes from a query rather than from the roster, so none of the
+    // roster watchers above would notice the hidden list changing.
+    watch(
+        () => hiddenFriendsStore.count,
+        () => {
+            loadCandidates();
+        }
+    );
+
     onMounted(async () => {
         await loadCandidates();
         const wanted = String(route.query.user || '');
@@ -794,8 +843,20 @@
             return;
         }
         if (!selectedId.value && candidates.value.length) {
-            selectedId.value = candidates.value[0].userId;
+            // Self is pinned at the top of the list, but opening the page on your own
+            // near-empty history would look like a bug - start on a friend instead.
+            const firstFriend = candidates.value.find((entry) => entry.userId !== selfId.value);
+            selectedId.value = (firstFriend || candidates.value[0]).userId;
             loadHistory();
+        }
+    });
+
+    // The logged-in user arrives after the first candidate load on a cold start, so
+    // without this the pinned "yourself" row would only appear once something else
+    // refreshed the list.
+    watch(selfId, (id) => {
+        if (id && !candidates.value.some((entry) => entry.userId === id)) {
+            loadCandidates();
         }
     });
 

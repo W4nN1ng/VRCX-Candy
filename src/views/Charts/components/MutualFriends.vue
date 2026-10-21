@@ -319,6 +319,7 @@
         useAppearanceSettingsStore,
         useChartsStore,
         useFriendStore,
+        useHiddenFriendsStore,
         useModalStore,
         useUserStore
     } from '../../../stores';
@@ -336,6 +337,7 @@
     const modalStore = useModalStore();
     const chartsStore = useChartsStore();
     const appearanceStore = useAppearanceSettingsStore();
+    const hiddenFriendsStore = useHiddenFriendsStore();
     const { friends } = storeToRefs(friendStore);
     const { currentUser } = storeToRefs(userStore);
     const { isDarkMode } = storeToRefs(appearanceStore);
@@ -1141,12 +1143,45 @@
         sigmaInstance.refresh();
     }
 
+    /**
+     * @param {Map<string, { friend: object; mutuals: { id: string }[] }>} mutualMap
+     * @returns {Map<string, object>} The same map with the hidden friends taken out
+     */
+    function withoutHiddenFriends(mutualMap) {
+        const hidden = hiddenFriendsStore.hiddenIds;
+        if (hidden.size === 0) {
+            return mutualMap;
+        }
+        // Filtered at render time only. The map kept for re-applying stays whole, so
+        // unhiding somebody puts them back without waiting for another fetch.
+        const visible = new Map();
+        for (const [friendId, entry] of mutualMap) {
+            if (!entry || hidden.has(friendId)) {
+                continue;
+            }
+            visible.set(friendId, { ...entry, mutuals: entry.mutuals.filter((mutual) => !hidden.has(mutual.id)) });
+        }
+        return visible;
+    }
+
     async function applyGraph(mutualMap) {
         lastMutualMap = mutualMap;
-        const graph = await buildGraphFromMutualMap(mutualMap, graphMeta.value);
+        const graph = await buildGraphFromMutualMap(withoutHiddenFriends(mutualMap), graphMeta.value);
         currentGraph = graph;
         renderGraph(graph);
     }
+
+    // The graph is built from a snapshot the fetcher keeps regardless of the hidden
+    // list, so hiding redraws from what is already loaded and unhiding puts the person
+    // back without waiting for another fetch.
+    watch(
+        () => hiddenFriendsStore.count,
+        () => {
+            if (lastMutualMap && lastMutualMap.size > 0) {
+                applyGraph(lastMutualMap);
+            }
+        }
+    );
 
     async function loadGraphFromDatabase() {
         if (!watchState.isLoggedIn || !currentUser.value?.id) return;

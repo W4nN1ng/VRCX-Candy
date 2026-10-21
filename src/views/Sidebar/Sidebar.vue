@@ -306,7 +306,7 @@
             style="height: calc(100% - 70px); margin-top: 6px">
             <template #label-friends>
                 <span>{{ t('side_panel.friends') }}</span>
-                <span class="sidebar-tab-count"> ({{ onlineFriendCount }}/{{ friends.size }}) </span>
+                <span class="sidebar-tab-count"> ({{ onlineFriendCount }}/{{ visibleFriendCount }}) </span>
             </template>
             <template #label-groups>
                 <span>{{ t('side_panel.groups') }}</span>
@@ -375,7 +375,7 @@
     import GroupsSidebar from './components/GroupsSidebar.vue';
     import NotificationCenterSheet from './components/NotificationCenterSheet.vue';
 
-    const { friends, isRefreshFriendsLoading, onlineFriendCount } = storeToRefs(useFriendStore());
+    const { visibleFriendCount, isRefreshFriendsLoading, onlineFriendCount } = storeToRefs(useFriendStore());
     const { groupInstances } = storeToRefs(useGroupStore());
     const notificationStore = useNotificationStore();
     const { isNotificationCenterOpen, hasUnseenNotifications } = storeToRefs(notificationStore);

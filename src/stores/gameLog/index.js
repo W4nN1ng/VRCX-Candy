@@ -6,6 +6,7 @@ import { buildGameLogSessions } from '../../views/GameLog/sessions/buildGameLogS
 
 import {
     compareGameLogRows,
+    filterHiddenRows,
     findUserByDisplayName,
     formatSeconds,
     gameLogSearchFilter,
@@ -16,6 +17,7 @@ import { database } from '../../services/database';
 import { tryLoadPlayerList } from '../../coordinators/gameLogCoordinator';
 import { useAdvancedSettingsStore } from '../settings/advanced';
 import { useFriendStore } from '../friend';
+import { useHiddenFriendsStore } from '../settings/hiddenFriends';
 import { useNotificationStore } from '../notification';
 import { useDashboardStore } from '../dashboard';
 
@@ -38,6 +40,7 @@ export const useGameLogStore = defineStore('GameLog', () => {
     const notificationStore = useNotificationStore();
     const vrStore = useVrStore();
     const friendStore = useFriendStore();
+    const hiddenFriendsStore = useHiddenFriendsStore();
     const userStore = useUserStore();
 
     const vrcxStore = useVrcxStore();
@@ -358,7 +361,8 @@ export const useGameLogStore = defineStore('GameLog', () => {
                 row.isFriend = gameLogIsFriend(row);
                 row.isFavorite = gameLogIsFavorite(row);
             }
-            gameLogTableData.value = rows;
+            // Read side only - the host owns the gamelog table and keeps every row.
+            gameLogTableData.value = filterHiddenRows(rows, (row) => row.userId, hiddenFriendsStore.hiddenIds);
         } finally {
             gameLogTable.value.loading = false;
         }
@@ -368,6 +372,13 @@ export const useGameLogStore = defineStore('GameLog', () => {
      * @param entry
      */
     function addGameLog(entry) {
+        // Safe to bail out here: every game log write is a separate statement in the
+        // caller (gameLogCoordinator / locationCoordinator / photon / setNowPlaying),
+        // never inside this function - checked by grepping all nine call sites. So the
+        // row still reaches SQLite and unhiding the person shows it again.
+        if (hiddenFriendsStore.isHidden(entry.userId)) {
+            return;
+        }
         entry.isFriend = gameLogIsFriend(entry);
         entry.isFavorite = gameLogIsFavorite(entry);
 
@@ -1003,7 +1014,10 @@ export const useGameLogStore = defineStore('GameLog', () => {
         const dates = locations.map((l) => new Date(l.created_at).getTime());
         const minDate = new Date(Math.min(...dates) - 86400000).toISOString();
         const maxDate = new Date(Math.max(...dates) + 86400000).toISOString();
-        const events = await database.getSessionsEventsForSegments(locationTags, minDate, maxDate);
+        const allEvents = await database.getSessionsEventsForSegments(locationTags, minDate, maxDate);
+        // A hidden friend is not counted as somebody who was in the room either, which
+        // is the only reading that makes the session row consistent with the table view.
+        const events = filterHiddenRows(allEvents, (e) => e.userId, hiddenFriendsStore.hiddenIds);
         for (const e of events) {
             e.isFriend = gameLogIsFriend(e);
             e.isFavorite = gameLogIsFavorite(e);

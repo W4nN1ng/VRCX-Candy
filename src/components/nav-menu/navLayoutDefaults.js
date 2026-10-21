@@ -14,6 +14,8 @@ export function createBaseDefaultNavLayout(t) {
             items: [
                 'candy-auto-status',
                 'candy-auto-invites',
+                'candy-hidden-friends',
+                'candy-room-mutuals',
                 'charts-friend-footprints',
                 'charts-friend-status-lights',
                 'charts-friend-together',

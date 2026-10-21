@@ -8,6 +8,8 @@ const CANDY_FOLDER_ID = 'default-folder-candy';
 const CANDY_KEYS = [
     'candy-auto-status',
     'candy-auto-invites',
+    'candy-hidden-friends',
+    'candy-room-mutuals',
     'charts-friend-footprints',
     'charts-friend-status-lights',
     'charts-friend-together',

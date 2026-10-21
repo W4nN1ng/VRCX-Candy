@@ -142,6 +142,16 @@ const routes = [
                 name: 'candy-auto-invites',
                 component: () => import('./../views/Candy/components/AutoInviteApprovals.vue')
             },
+            {
+                path: 'candy/hidden-friends',
+                name: 'candy-hidden-friends',
+                component: () => import('./../views/Candy/components/HiddenFriends.vue')
+            },
+            {
+                path: 'candy/room-mutuals',
+                name: 'candy-room-mutuals',
+                component: () => import('./../views/Candy/components/RoomMutualFriends.vue')
+            },
             { path: 'tools', name: 'tools', component: Tools },
             {
                 path: 'tools/gallery',

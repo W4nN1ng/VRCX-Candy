@@ -40,6 +40,8 @@ vi.mock('../../../stores', () => ({
     useAppearanceSettingsStore: () => ({
         randomUserColours: mocks.randomUserColours
     }),
+    // The shared-friends column reads this; with nothing looked up it prints nothing.
+    useRoomMutualsStore: () => ({ countFor: () => null }),
     usePhotonStore: () => ({
         photonLoggingEnabled: mocks.photonLoggingEnabled,
         chatboxUserBlacklist: mocks.chatboxUserBlacklist,

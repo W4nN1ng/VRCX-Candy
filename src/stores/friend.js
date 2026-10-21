@@ -7,6 +7,7 @@ import {
     compareByCreatedAtAscending,
     createRateLimiter,
     executeWithBackoff,
+    filterHiddenRows,
     getFriendsSortFunction,
     isRealInstance
 } from '../shared/utils';
@@ -22,6 +23,7 @@ import { database } from '../services/database';
 import { useAppearanceSettingsStore } from './settings/appearance';
 import { useFavoriteStore } from './favorite';
 import { useGeneralSettingsStore } from './settings/general';
+import { useHiddenFriendsStore } from './settings/hiddenFriends';
 import { useGroupStore } from './group';
 import { useLocationStore } from './location';
 import { useUserStore } from './user';
@@ -39,6 +41,7 @@ export const useFriendStore = defineStore('Friend', () => {
     const groupStore = useGroupStore();
     const locationStore = useLocationStore();
     const dashboardStore = useDashboardStore();
+    const hiddenFriendsStore = useHiddenFriendsStore();
 
     const router = useRouter();
 
@@ -231,9 +234,29 @@ export const useFriendStore = defineStore('Friend', () => {
         sortedFriends.value = next;
     }
 
+    /**
+     * The sorted roster with the hidden friends taken out.
+     *
+     * Every list below reads this instead of sortedFriends, which is what makes
+     * "hidden" mean the same thing everywhere at once - the sidebar, the locations
+     * page, the invite pickers, the online counter in the header and the VR overlay.
+     * Doing it here rather than in each view is the difference between one rule and
+     * six places that can disagree.
+     *
+     * The roster itself (the friends Map) is untouched on purpose: a hidden person is
+     * still polled, still stored, and still arrives in the feed tables, so unhiding
+     * them shows the whole period they were hidden rather than starting from then.
+     */
+    const visibleSortedFriends = computed(() =>
+        filterHiddenRows(sortedFriends.value, (friend) => friend.id, hiddenFriendsStore.hiddenIds)
+    );
+
+    /** Shown wherever a count of "my friends" is displayed, so it matches what is on screen. */
+    const visibleFriendCount = computed(() => visibleSortedFriends.value.length);
+
     const allFavoriteOnlineFriends = computed(() => {
         const favoriteIds = allFavoriteFriendIds.value;
-        const result = sortedFriends.value.filter((f) => f.state === 'online' && favoriteIds.has(f.id));
+        const result = visibleSortedFriends.value.filter((f) => f.state === 'online' && favoriteIds.has(f.id));
         trackDerivedDebug('allFavoriteOnlineFriends', result.length);
         return result;
     });
@@ -281,25 +304,25 @@ export const useFriendStore = defineStore('Friend', () => {
     );
 
     const vipFriends = computed(() => {
-        const result = sortedFriends.value.filter((f) => f.state === 'online' && f.isVIP);
+        const result = visibleSortedFriends.value.filter((f) => f.state === 'online' && f.isVIP);
         trackDerivedDebug('vipFriends', result.length);
         return result;
     });
 
     const onlineFriends = computed(() => {
-        const result = sortedFriends.value.filter((f) => f.state === 'online' && !f.isVIP);
+        const result = visibleSortedFriends.value.filter((f) => f.state === 'online' && !f.isVIP);
         trackDerivedDebug('onlineFriends', result.length);
         return result;
     });
 
     const activeFriends = computed(() => {
-        const result = sortedFriends.value.filter((f) => f.state === 'active');
+        const result = visibleSortedFriends.value.filter((f) => f.state === 'active');
         trackDerivedDebug('activeFriends', result.length);
         return result;
     });
 
     const offlineFriends = computed(() => {
-        const result = sortedFriends.value.filter((f) => f.state === 'offline' || !f.state);
+        const result = visibleSortedFriends.value.filter((f) => f.state === 'offline' || !f.state);
         trackDerivedDebug('offlineFriends', result.length);
         return result;
     });
@@ -307,7 +330,7 @@ export const useFriendStore = defineStore('Friend', () => {
     const friendsInSameInstance = computed(() => {
         const friendsList = {};
 
-        sortedFriends.value.forEach((friend) => {
+        visibleSortedFriends.value.forEach((friend) => {
             if (friend.state !== 'online') {
                 return;
             }
@@ -958,9 +981,24 @@ export const useFriendStore = defineStore('Friend', () => {
 
     async function initFriendLogHistoryTable() {
         friendLogTable.value.loading = true;
-        friendLogTable.value.data = await database.getFriendLogHistory();
+        // Filtered on the way out, never on the way in: the history table keeps every
+        // row, so unhiding somebody shows their whole history again.
+        const rows = await database.getFriendLogHistory();
+        friendLogTable.value.data = filterHiddenRows(rows, (row) => row.userId, hiddenFriendsStore.hiddenIds);
         friendLogTable.value.loading = false;
     }
+
+    // Hiding somebody leaves the roster and the route untouched, so the history table
+    // would keep showing their rows - or go on missing them - until the page was
+    // re-entered. Only reload when this table is actually on screen.
+    watch(
+        () => hiddenFriendsStore.count,
+        () => {
+            if (friendLogTable.value.data.length > 0) {
+                initFriendLogHistoryTable();
+            }
+        }
+    );
 
     /**
      * @param {number} friendNumber
@@ -1282,6 +1320,9 @@ export const useFriendStore = defineStore('Friend', () => {
         state,
 
         friends,
+
+        visibleSortedFriends,
+        visibleFriendCount,
 
         vipFriends,
         onlineFriends,

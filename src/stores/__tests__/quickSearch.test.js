@@ -6,7 +6,8 @@ const mocks = vi.hoisted(() => ({
     workerInstances: [],
     friendStore: null,
     searchIndexStore: null,
-    userStore: null
+    userStore: null,
+    hiddenFriendsStore: null
 }));
 
 vi.mock('../quickSearchWorker.js?worker&inline', () => ({
@@ -31,6 +32,9 @@ vi.mock('../searchIndex', () => ({
 }));
 vi.mock('../user', () => ({
     useUserStore: () => mocks.userStore
+}));
+vi.mock('../settings/hiddenFriends', () => ({
+    useHiddenFriendsStore: () => mocks.hiddenFriendsStore
 }));
 
 const showUserDialog = vi.fn();
@@ -80,6 +84,12 @@ function setupStores() {
         }
     });
     mocks.userStore = reactive({ currentUser: { id: 'usr_me' } });
+    mocks.hiddenFriendsStore = reactive({
+        hiddenIds: new Set(),
+        isHidden(userId) {
+            return this.hiddenIds.has(userId);
+        }
+    });
 }
 
 describe('useQuickSearchStore', () => {
@@ -221,5 +231,39 @@ describe('useQuickSearchStore', () => {
         expect(updateIdx).toBeLessThan(searchIdx);
 
         vi.useRealTimers();
+    });
+
+    test('leaves a hidden friend out of the results', async () => {
+        const store = useQuickSearchStore();
+        store.setQuery('an');
+        await nextTick();
+
+        const worker = mocks.workerInstances[0];
+        const seq = worker.postMessage.mock.calls.at(-1)[0].payload.seq;
+
+        mocks.friendStore.friends.set('usr_ann', { id: 'usr_ann', name: 'Ann', ref: { id: 'usr_ann' } });
+        mocks.friendStore.friends.set('usr_anna', { id: 'usr_anna', name: 'Anna', ref: { id: 'usr_anna' } });
+        mocks.hiddenFriendsStore.hiddenIds.add('usr_anna');
+
+        worker.emit({
+            type: 'searchResult',
+            payload: {
+                seq,
+                friends: [
+                    { id: 'usr_ann', name: 'Ann' },
+                    { id: 'usr_anna', name: 'Anna' }
+                ],
+                ownAvatars: [],
+                favAvatars: [],
+                ownWorlds: [],
+                favWorlds: [],
+                ownGroups: [],
+                joinedGroups: []
+            }
+        });
+
+        // The index itself is not touched, so unhiding needs no re-sync - only what the
+        // picker is handed has the hidden person taken out.
+        expect(store.friendResults.map((item) => item.id)).toEqual(['usr_ann']);
     });
 });

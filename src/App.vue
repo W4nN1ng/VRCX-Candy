@@ -26,6 +26,7 @@
     import { computed, onBeforeMount, onMounted } from 'vue';
 
     import { addGameLogEvent, getGameLogTable } from './coordinators/gameLogCoordinator';
+    import { initRoomMutualScan } from './coordinators/roomMutualsCoordinator';
     import {
         runCheckVRChatDebugLoggingFlow,
         runUpdateIsGameRunningFlow,
@@ -78,6 +79,10 @@
             store.auth.autoLoginAfterMounted();
             store.vrcx.checkAutoBackupRestoreVrcRegistry();
         }
+
+        // Starts watching the room so the shared-friends list is ready before it is
+        // ever looked at.
+        initRoomMutualScan();
 
         runCheckVRChatDebugLoggingFlow();
     });

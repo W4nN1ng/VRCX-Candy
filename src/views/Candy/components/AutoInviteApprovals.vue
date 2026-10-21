@@ -1,5 +1,5 @@
 <template>
-    <div class="auto-invite-page flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-4 pb-8">
+    <div class="auto-invite-page x-container flex flex-col gap-2 pb-8">
         <div class="pt-4 text-base font-medium">{{ t('view.candy.auto_invites.tab_label') }}</div>
         <p class="page-intro">{{ t('view.candy.auto_invites.intro') }}</p>
 

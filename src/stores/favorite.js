@@ -3,16 +3,18 @@ import { defineStore } from 'pinia';
 import { toast } from 'vue-sonner';
 import { useI18n } from 'vue-i18n';
 
-import { compareByName, createDefaultFavoriteGroupRef, replaceReactiveObject } from '../shared/utils';
+import { compareByName, createDefaultFavoriteGroupRef, filterHiddenRows, replaceReactiveObject } from '../shared/utils';
 import { favoriteRequest } from '../api';
 import { database } from '../services/database';
 import { processBulk } from '../services/request';
 import { useAppearanceSettingsStore } from './settings/appearance';
+import { useHiddenFriendsStore } from './settings/hiddenFriends';
 import { watchState } from '../services/watchState';
 import { onLoginStateChanged } from '../coordinators/favoriteCoordinator';
 
 export const useFavoriteStore = defineStore('Favorite', () => {
     const appearanceSettingsStore = useAppearanceSettingsStore();
+    const hiddenFriendsStore = useHiddenFriendsStore();
 
     const { t } = useI18n();
 
@@ -85,10 +87,12 @@ export const useFavoriteStore = defineStore('Favorite', () => {
     const favoritesSortOrder = ref([]);
 
     const favoriteFriends = computed(() => {
-        if (appearanceSettingsStore.sortFavorites) {
-            return state.favoriteFriends_.toSorted(compareByFavoriteSortOrder);
-        }
-        return state.favoriteFriends_.toSorted(compareByName);
+        const sorted = appearanceSettingsStore.sortFavorites
+            ? state.favoriteFriends_.toSorted(compareByFavoriteSortOrder)
+            : state.favoriteFriends_.toSorted(compareByName);
+        // The display list only. state.favoriteFriends_ stays whole, so the favourite
+        // itself is still sent to the API and unhiding puts the row straight back.
+        return filterHiddenRows(sorted, (friend) => friend.id, hiddenFriendsStore.hiddenIds);
     });
 
     const favoriteWorlds = computed(() => {

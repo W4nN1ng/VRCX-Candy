@@ -285,6 +285,57 @@
                     "already-handled": "已经处理过",
                     "failed": "发送失败"
                 }
+            },
+            "hidden_friends": {
+                "tab_label": "隐藏好友",
+                "intro": "有些好友不能删——可能是同一个群的熟人、合作过的人，或者删了会察觉的人。隐藏会把这个人从 VRCX 的每一个列表、消息和图表里去掉，但好友关系本身一点不动。",
+                "keeps_recording": "隐藏是戴墨镜，不是删好友。VRCX 照常拉取他的状态，他做的一切也照常写进数据库；所以取消隐藏之后，他被隐藏期间的所有记录会一次性全部显示回来。",
+                "list_title": "已隐藏",
+                "list_empty": "目前没有隐藏任何人。",
+                "unhide": "取消隐藏",
+                "pick_friend": "选择一个好友…",
+                "hide": "隐藏",
+                "pick_from_sidebar": "也可以直接在右侧好友栏里右键某个好友，选「隐藏该好友」。",
+                "unhide_all": "全部取消隐藏",
+                "unhide_all_hint": "隐藏不会删除任何东西，这一步只是把人重新显示出来。",
+                "unhide_all_confirm": "把 {count} 位隐藏的好友全部显示回来？",
+                "unhidden_toast": "已取消隐藏",
+                "unhidden_toast_hint": "他的记录都回来了——被隐藏的那段时间其实一直在记录。",
+                "scope_title": "隐藏会在哪些地方生效",
+                "scope_list": "右侧好友栏、好友页、好友位置页、收藏列表。",
+                "scope_feed": "动态、游戏日志和所有通知，包括桌面弹窗、提示音和手腕 overlay。",
+                "scope_charts": "Candy 里的图表：好友足迹、状态灯、同游、见面统计，以及共同好友图。",
+                "scope_not_game": "这不是屏蔽。游戏里什么都不变——他仍然能进你的房间、仍然看得到你在线、也仍然能给你发消息。"
+            },
+            "room_mutuals": {
+                "tab_label": "房内共同好友",
+                "intro": "进房间几秒钟后，这里会列出屋里哪些人跟你有共同好友——最快分辨「这个陌生人是圈子里来的」还是「纯路人」。",
+                "opted_out": "你在 VRChat 自己的隐私设置里关掉了「分享共同好友/连接」，所以这里谁都查不出来。去游戏里打开后，本页就会正常显示。",
+                "no_room": "你现在不在任何房间里，没有可看的人。",
+                "list_title": "当前房间",
+                "summary": "屋里 {players} 人 · 其中 {withMutuals} 人和你有共同好友 · {friends} 人本来就是你的好友",
+                "refresh": "重新查",
+                "empty": "还没有人进来。",
+                "state_mutual": "{friends} 个共同好友",
+                "state_mutual_with_groups": "{friends} 个共同好友 · {groups} 个共同群组",
+                "state_none": "没有共同好友",
+                "state_friend": "你的好友",
+                "state_pending": "还没查到",
+                "state_skipped": "超出上限，没查",
+                "state_denied": "对方隐藏了共同好友",
+                "loading_names": "加载中…",
+                "no_names": "名字取不到。",
+                "settings_title": "工作方式",
+                "enable": "查房里的共同好友",
+                "enable_hint": "进房几秒后，每个陌生人发一次请求；你自己的好友不会去查。",
+                "notify": "房里有跟你有共同好友的人时提示我",
+                "notify_hint": "每个房间只说一次，在进房时说。默认关闭。",
+                "limit": "每个房间最多查几人",
+                "limit_hint": "公开房满员是 40 人，超出上限的人会被标成「没查」。",
+                "cost_hint": "答案保留 15 分钟；被拒绝的人一小时内不会再问第二次。",
+                "announce": "这屋里有 {count} 个人和你有共同好友",
+                "only_shared": "只看有共同好友的",
+                "no_shared": "这屋里没有和你有共同好友的人。"
             }
         },
         "login": {
@@ -760,8 +811,7 @@
                 "row": {
                     "ongoing": "还在这里",
                     "unknown": "离线时离开"
-                },
-                "self_label": "我自己"
+                }
             },
             "friend_status_lights": {
                 "tab_label": "好友状态灯",
@@ -1699,6 +1749,14 @@
                 "auto_invites": {
                     "title": "自动通过加入请求",
                     "description": "预先批准几位好友，让他们在你挂着黄灯、人不在电脑前的时候也能进你自己的房间；每天上限、时段、只认黄灯这些限制可以叠着加，每一次通过或跳过都会记在页面上。在 Candy 分组里，默认关闭。"
+                },
+                "hidden_friends": {
+                    "title": "隐藏好友",
+                    "description": "把某个好友从 VRCX 的每个列表、消息、通知和图表里去掉，但不删好友、也不停止记录——所以取消隐藏时，他被隐藏的那段时间会全部显示回来。在右侧好友栏右键即可隐藏，在 Candy 里取消。"
+                },
+                "room_mutuals": {
+                    "title": "房内共同好友",
+                    "description": "进房间几秒钟后，VRCX 会去查这屋里哪些陌生人和你有共同好友，并按人数从多到少排出来；点开某个人的名字还能看到具体是哪几个共同好友。官方那个「房内玩家」表格也加了一列显示这个数字，总开关在 Candy 页面里。"
                 }
             },
             "reopen_hint": "这个说明只自动弹一次。以后想再看，点侧边栏最上方的帮助按钮。",
@@ -1803,7 +1861,10 @@
                 "logout": "退出登录",
                 "edit_note_memo": "编辑备注",
                 "reset_home": "重置出生点",
-                "edit_profile": "编辑个人主页"
+                "edit_profile": "编辑个人主页",
+                "hide_friend": "隐藏该好友",
+                "hide_friend_done": "已隐藏 {name}",
+                "hide_friend_done_hint": "他在 VRCX 的每个列表里都不显示了。关于他的记录一条没删——去「Candy → 隐藏好友」可以取消。"
             },
             "info": {
                 "header": "信息",
@@ -3457,7 +3518,8 @@
             "date": "时间",
             "user": "玩家",
             "type": "种类",
-            "detail": "详细信息"
+            "detail": "详细信息",
+            "shared_friends": "共同好友"
         },
         "friendLog": {
             "date": "时间",

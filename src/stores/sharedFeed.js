@@ -2,7 +2,7 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { watch } from 'vue';
 
-import { compareByCreatedAt, getGroupName, getWorldName } from '../shared/utils';
+import { compareByCreatedAt, filterHiddenRows, getGroupName, getWorldName } from '../shared/utils';
 import { database } from '../services/database';
 import { useFriendStore } from './friend';
 import { useInstanceStore } from './instance';
@@ -10,6 +10,7 @@ import { useLocationStore } from './location';
 import { useModerationStore } from './moderation';
 import { useNotificationStore } from './notification';
 import { useNotificationsSettingsStore } from './settings/notifications';
+import { useHiddenFriendsStore } from './settings/hiddenFriends';
 import { useUserStore } from './user';
 import { useWristOverlaySettingsStore } from './settings/wristOverlay';
 import { watchState } from '../services/watchState';
@@ -23,6 +24,7 @@ export const useSharedFeedStore = defineStore('SharedFeed', () => {
     const instanceStore = useInstanceStore();
     const moderationStore = useModerationStore();
     const notificationStore = useNotificationStore();
+    const hiddenFriendsStore = useHiddenFriendsStore();
 
     const onPlayerJoining = ref([]);
 
@@ -161,6 +163,11 @@ export const useSharedFeedStore = defineStore('SharedFeed', () => {
         // remove current user
         newFeed = newFeed.filter((ctx) => ctx.userId !== userStore.currentUser.id);
 
+        // and remove the friends this person asked not to see. This is the read side
+        // only - every row stays in SQLite, so unhiding brings back the whole stretch
+        // they were hidden without waiting for anything new to arrive.
+        newFeed = filterHiddenRows(newFeed, (ctx) => ctx.userId || ctx.senderUserId, hiddenFriendsStore.hiddenIds);
+
         // FriendLog, Moderations Against (nope, not worth it)
 
         newFeed.sort(compareByCreatedAt);
@@ -197,6 +204,11 @@ export const useSharedFeedStore = defineStore('SharedFeed', () => {
             return;
         }
         if (ctx.type === 'FriendRequest' || ctx.type === 'Avatar') {
+            return;
+        }
+        // Same rule as the loader above, applied to the live stream: nothing about a
+        // hidden friend reaches the wrist feed while they are hidden.
+        if (userId && hiddenFriendsStore.isHidden(userId)) {
             return;
         }
 

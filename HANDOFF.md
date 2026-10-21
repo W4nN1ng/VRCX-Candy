@@ -77,6 +77,9 @@
 | `726ac41f` | 状态灯不再把离线时间算成挂灯 | 见第 5、6 节 `feed_online_offline` 一条 |
 | `07f82723` | 改版页面不再强制收起右侧好友栏 | 见第 5 节 |
 | （见面功能） | 常一起玩的好友 | `src/shared/utils/friendMeetings.js`（32 单测）+ `views/Charts/components/FriendMeetings.vue`，数据源 `gamelog_join_leave` × `gamelog_location`，见第 6 节。**顺带修掉 `getSelfLocationSegments` 把停留区间算反的 bug**（同游页受影响） |
+| （房内共同好友） | 进房自动查"这屋里谁和你有共同好友" | `src/shared/utils/roomMutuals.js`（24 单测）+ `stores/settings/roomMutuals.js` + `coordinators/roomMutualsCoordinator.js`（App.vue `onMounted` 里 `initRoomMutualScan()` 启动）+ `views/Candy/components/RoomMutualFriends.vue`，并在官方「房内玩家」表格加了一列。**名单是本地就有的，只有共同好友数要花请求**，见下面第 5 节 |
+| （自己也算） | 状态灯/足迹把登录者自己算进去，并显示本名而不是"我自己" | `src/shared/utils/selfStatusHistory.js`（15 单测）+ `coordinators/userCoordinator.js` 的 `recordSelfStatusChange`；数据口径见第 6 节"动态表里几乎没有你自己"一条。**自己的灯历史从今天开始才有** |
+| （隐藏好友） | 隐藏好友 | `src/shared/utils/hiddenFriends.js`（27 单测）+ `stores/settings/hiddenFriends.js`（12 单测）+ `views/Candy/components/HiddenFriends.vue`，配置键 `VRCX_hiddenFriends_v1`。**过滤点一律在展示层，数据库写入之前一个都不许拦**，原因见下面第 5 节"隐藏好友"那一条 |
 | （自动通过） | 自动通过加入请求 | `src/shared/utils/autoInviteRules.js`（27 单测，纯函数）+ `stores/settings/autoInviteApprovals.js` + `coordinators/autoInviteCoordinator.js`，挂在 `stores/notification/index.js` 的 `handleNotification` 上。**这是本 fork 唯一会替用户放人进房间的功能**，安全底线见下面第 5 节 |
 
 ### 节能模式的实测结论（重要，别重复踩）
@@ -177,6 +180,33 @@
 - 三条不可配置的底线（写死在 `isOwnInviteRoom` / 引擎顺序里，别做成开关）：只在自己的 `private / friends / friends+ / invite / invite+` 房间动作（`parseLocation` 的 `userId === 我`），**public 和 group 一律不动**；同一条通知只处理一次（`claimNotification`）；同一好友 30 秒冷却 + 每日上限。
 - **默认参数 `= {}` 只挡 `undefined`，不挡 `null`。** `normalizeAutoInviteSettings(null)` 直接 `Cannot read properties of null` 崩掉，是单测抓到的。凡是吃"从存储读回来的 blob"的归一化函数，都要显式写 `input && typeof input === 'object' ? input : {}`。
 
+### 房内共同好友（进房自动查"谁和你有共同好友"）
+
+- **房间名单是免费的，只有"共同好友数"要花请求。** `locationStore.lastLocation.playerList` 由游戏日志的 `OnPlayerJoined/Left` 填（`coordinators/gameLogCoordinator.js`），**包含陌生人**，人进人出实时更新——不要为"谁在屋里"去调接口。要调的只有 `queryRequest.fetch('mutualCounts', { userId })` → `{ json: { friends, groups } }`，VRCX 在"打开陌生人资料卡"时本来就在用它，query 层自带 15 分钟缓存。
+- **三条不可省的规矩**：① 串行 + 每次之间隔 400ms，绝不并发打 40 个（会把整个会话打到限流，连累别的功能）；② 上限 40（公开房满员），超出的人标成"没查"而不是继续查；③ **每一轮 await 之后必须查 `store.isRunCurrent(runId)`**，换房时 `beginRun()` 会换号，旧批次剩下的请求要停、已经回来的答案不许画到新房间上。
+- **"查不到"和"0 个共同好友"是两回事，必须分开显示。** 玩家可以自己隐藏共同好友，接口回 403；把它画成 0 等于对陌生人编造事实。所以状态里有 `denied`，而且**拒绝的缓存（1 小时）比成功的（15 分钟）长**——否则每换一个房间都会对同一批拒绝者重问一次。
+- **`currentUser.hasSharedConnectionsOptOut` 为真时整个功能什么都查不到**（VRChat 自己的隐私开关），这时不要发请求，页面直接显示说明文案。这条是用户侧唯一"看起来像坏了"的情况。
+- **好友不查**：`friendIds` 命中就标 `friend` 状态，并且**不占用上限名额**（否则一个全是好友的房会把额度吃光）。隐藏的好友直接不进列表，和隐藏好友功能保持一致。
+- **Candy 页和「房内玩家」那一列读的是同一个 computed**（`store.rows` / `store.countFor`），所以一个房间只花一套请求。别在列里再发一次查询。
+- **缓存只在内存里**，故意不落盘：房间几分钟就换一批人，把陌生人的答案存到重启之后只会画过期数字。
+- **给视图组件新增 store 依赖，一定要同时补那个组件测试的 `vi.mock('../..../stores')`。** 这轮 `PlayerList.vue` 多用了 `useRoomMutualsStore`，`PlayerList.test.js` 立刻 5 条全红（`No "useRoomMutualsStore" export is defined on the mock`）；上一轮 `quickSearch.js` 多 import 一个 store 也把它的测试搞红过。**这是同一个坑的第二次**，凡是改视图/ store 的 import 列表，跑一遍该文件的测试再看总数有没有变。
+
+### 隐藏好友（"不看某人"，不是"删掉某人"，动手前必读）
+
+- **一句话规则：过滤只许发生在"即将显示"的那一刻，绝不允许发生在数据库写入之前。** 用户的要求原文是"取消隐藏后，之前记录的所有事件将一次性显示回来"。最容易踩的地方是 `stores/notification/index.js` 的 `handleNotification`：`database.addNotificationToDatabase(ref)`（约 177 行）和 `notificationTable.value.data.push(ref)`（约 197 行）在**同一个 if 块**里，看着就像"在函数开头 return 一下最省事"——那样做等于顺手把这个人从历史里抹掉了。现在的写法是照旧写库、照旧 push，只跳过 `queueNotificationNoty` / `sharedFeedStore.addEntry` / `uiStore.notifyMenu` 这三件"通告"动作。
+- **好友列表只有一个漏斗，别在视图里各滤各的。** `stores/friend.js` 的 `visibleSortedFriends`（`sortedFriends` 过滤后再导出，`sortedFriends` 本身**没有**从 store 导出）是唯一的可见名单来源，六个派生 computed（`allFavoriteOnlineFriends`/`vipFriends`/`onlineFriends`/`activeFriends`/`offlineFriends`/`friendsInSameInstance`）全部改读它，于是侧栏、好友位置页、`InviteDialog`/`InviteGroupDialog`/`NewInstanceDialog` 的邀请选择器、表头在线人数、VR overlay 计数一次性全覆盖。新增第 7 个派生列表时记得也读它。
+- **通知的入口有 5 个**（`handleNotification`、`handleNotificationV2`、`appendNotificationTableEntry`、`initNotifications`、`handleNotificationV2Update`），所以过滤放在读取侧：三个 category computed（`friendNotifications`/`groupNotifications`/`otherNotifications`）+ `views/Notifications/Notification.vue` 自己的 `notificationDisplayData`。`hasUnseenNotifications` 已改成从这三个未读列表推出来，不是数 `unseenNotifications` 的原始 id，否则小红点会给一个看不见的人亮着。
+- **提示音/桌面弹窗/手腕 overlay 的唯一门是 `playNoty`**（6 个调用点都经过它，含 gamelog 那条 `queueGameLogNoty`），所以一个 guard 就够，不用去 `overlayDispatch.js` 里加。
+- **好友的动态/游戏日志/通知的历史，写入点全部不在被过滤的那几个函数里**，这条是查过代码确认的，不是推断：`_feed_gps / _feed_status / _feed_bio / _feed_avatar / _feed_online_offline` 由 `coordinators/userEventCoordinator.js` 和 `coordinators/friendPresenceCoordinator.js` 写；`gamelog_*` 由 `coordinators/gameLogCoordinator.js`、`locationCoordinator.js`、`photon.js`、`gameLog/index.js` 的 `setNowPlaying` 写，并且都是 `addGameLog(entry)` **之后的一条独立语句**，所以 `addGameLog` 里 return 掉不会少写一行。只有通知是例外：`database.addNotificationToDatabase(ref)` 就写在 `handleNotification` **函数体内**（约 204 行），所以那里的 guard 必须放在它后面。
+- **图表页的数据是查询结果不是 roster**，`watch(() => friends.value.size)` 那套监听不到名单变化：足迹/状态灯/同游/见面四个页面各自加了 `watch(hiddenFriendsStore.count)` 重查。`FriendMeetings` 靠 `friendIds`（改成从 `visibleSortedFriends` 取）一处过全页；`MutualFriends` 在 `applyGraph` 里滤、而 `lastMutualMap` 存原始 map，所以取消隐藏不用重新抓取。
+- **有意没滤的地方（不是遗漏，别"顺手补上"）**：
+  - 工具页的导出（好友列表 / Discord 名字 / 备注）——那是用户主动对自己全量数据做的动作，导出文件里出现隐藏的人不算"在 VRCX 里显示"。
+  - `AutoStatusRulesSection` 的 `friendOptions` 下拉滤掉了隐藏的人（不给新规则当目标），但 `nameFor` 兜底回 roster 取名字，否则早就写好的规则会显示成空白行。
+  - `stores/search.js` 的 `searchUserByDisplayName` 是纯 API 查询：用户自己打字去查一个 profile，不是 VRCX 把这人摆到他面前。
+  - 同一房间的 travelers（`userStore.currentTravelers`）和实例人数——滤了会让房间人数说谎。
+- **给 store 新增 store 依赖前先看有没有测试在 mock 全部依赖。** 这次 `stores/quickSearch.js` 多 import 了一个 `./settings/hiddenFriends`，把 `services/config → services/sqlite → stores/index 桶` 这条链拉进了 `stores/__tests__/quickSearch.test.js`，报 `Cannot read properties of undefined (reading 'global')`（i18n 循环 import）。补一行 `vi.mock('../settings/hiddenFriends', ...)` 解决，顺带能测"隐藏的人不出现在搜索结果里"。
+- 名单**不按账号分**（和 `autoStatusRules` 同一个理由：「我不想看到这个人」跟哪个账号开着无关），存在单个配置键 `VRCX_hiddenFriends_v1`，条目是 `{userId, displayName, at}`，上限 500。存 `displayName` 是为了两种 roster 查不到的情况：首屏好友列表还没到、以及隐藏之后对方又删了好友。
+
 ---
 
 ## 6. 数据口径（sqlite 只读）
@@ -192,6 +222,10 @@
 - `friend_log_history`：`type` 为 `DisplayName` / `TrustLevel`，带 previous 值。
 - `feed_online_offline`：上下线事件。**会重复写**（实测 205 组相邻同类型行），所以要合并相邻同状态区间。
   - **在线与否只能由它决定**，`feed_status` 不能反过来证明人在线。见下面第 5 节"离线窗口内的状态行"。
+- **动态四张 `feed_*` 表和 `feed_online_offline` 里几乎没有"你自己"**，因为好友动态流本来就不含登录者本人。实测（账号 usr292d…，2026-10-05）：`feed_status` 自己只有 **3 行**且全在 2026-09-06，`feed_online_offline` 自己 **0 行**，`feed_gps` 自己 **0 行**。所以任何"把我也算进去"的图表都不能指望这些表：
+  - 我的**在线区间**用 `activity_sessions_v2`（`WHERE user_id = 我`，实测 122 段，`start_at/end_at` 是 epoch 毫秒，`is_open_tail=1` 表示还没结束）——`getActivitySessionsV2` 已有，好友同游页早就在用。
+  - 我的**位置**用全局表 `gamelog_location`（见上面一条）。
+  - 我的**灯**没有历史可挖，只能从今天开始记：`coordinators/userCoordinator.js` 的 `recordSelfStatusChange`，挂在 VRCX 真正知道自己状态的两个点上（`applyCurrentUser` 的 isLoggedIn 分支 = 程序自己发的 PUT；`applyUser` 的 `ref.id === currentUser.id` 分支 = 游戏内/网页端改的）。判定函数是 `shared/utils/selfStatusHistory.js` 的 `selfStatusChangeRow`，写回 `database.addStatusToDatabase`。**它带一个模块级 `lastRecordedSelfStatus` 记忆**，因为 `applyUser` 只把 `status` 抄回 store、不抄 `statusDescription`，少了这个记忆的话"只改文案"会被每次刷新重复写一行。
 - **`gamelog_location`（无表前缀，全局表）记的是"你自己"去过哪些房间**，`feed_gps` 只有好友。字段 `created_at, location, world_id, world_name, time, group_name`。
   - **`created_at` 是"进入"时间，`time` 是"待了多久"**，所以一次停留是 `[created_at, created_at + time]`。实测 560 行里 410 行符合这个读法、**0 行**符合"created_at 是离开时间"的反读法。`time` 是离开时才由 `updateGamelogLocationTimeToDatabase` 补写进去的，所以**最新那一行的 `time` 永远是 0**（就是你现在正待着的地方）——按"当前时间"封顶 12 小时处理，别当成长度为 0 丢掉。
   - 反着读会把每段停留整体前移自己的长度，"我和谁在同一个房间"从 413 次掉到 93 次。这个错曾经就在 `getSelfLocationSegments` 里（`9af63ea4` 引入，好友同游页用它判断"我在不在场"），2026-09-25 修掉。

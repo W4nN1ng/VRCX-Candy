@@ -23,6 +23,7 @@ vi.mock('@vueuse/core', async (importOriginal) => {
 vi.mock('../../../stores', () => ({
     useFriendStore: () => ({
         friends: ref(new Map()),
+        visibleFriendCount: ref(0),
         isRefreshFriendsLoading: ref(false),
         onlineFriendCount: ref(0)
     }),

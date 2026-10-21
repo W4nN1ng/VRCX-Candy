@@ -240,7 +240,13 @@
     import { Button } from '@/components/ui/button';
     import { Field, FieldContent, FieldLabel, FieldSeparator } from '@/components/ui/field';
 
-    import { useAutoStatusRulesStore, useFriendStore, useGeneralSettingsStore, useWorldStore } from '../../../stores';
+    import {
+        useAutoStatusRulesStore,
+        useFriendStore,
+        useGeneralSettingsStore,
+        useHiddenFriendsStore,
+        useWorldStore
+    } from '../../../stores';
     import SimpleSwitch from '../../Settings/components/SimpleSwitch.vue';
 
     const { t } = useI18n();
@@ -249,6 +255,7 @@
     const friendStore = useFriendStore();
     const worldStore = useWorldStore();
     const generalSettingsStore = useGeneralSettingsStore();
+    const hiddenFriendsStore = useHiddenFriendsStore();
 
     const { rules, fallbackMode, fallbackStatus, fallbackDescription } = storeToRefs(autoStatusRulesStore);
     const { autoStateChangeRulesBlendLegacy } = storeToRefs(generalSettingsStore);
@@ -257,7 +264,10 @@
     const draft = reactive({ type: 'friend', targetId: '', status: 'busy' });
 
     const friendOptions = computed(() =>
+        // A hidden friend is not offered as a new target. Rules that already name them
+        // keep working and keep their label - see nameFor below.
         [...friendStore.friends.entries()]
+            .filter(([id]) => !hiddenFriendsStore.hiddenIds.has(id))
             .map(([id, user]) => ({
                 // The friend record has carried both `name` and `displayName` across
                 // versions, and either can be empty for a person VRCX only knows from
@@ -285,7 +295,15 @@
     }
 
     function nameFor(type, id) {
-        return targetOptions(type).find((option) => option.id === id)?.name || '';
+        const listed = targetOptions(type).find((option) => option.id === id)?.name;
+        if (listed) {
+            return listed;
+        }
+        // The picker leaves the hidden friends out, so a rule written before somebody
+        // was hidden would otherwise render as a row that does not say what it is about.
+        // The roster still knows them, so the label comes from there.
+        const user = type === 'friend' ? friendStore.friends.get(id) : null;
+        return user?.displayName || user?.name || id || '';
     }
 
     function patch(rule, field, value) {

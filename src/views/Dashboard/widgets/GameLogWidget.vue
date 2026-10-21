@@ -148,8 +148,8 @@
 
     import { database } from '@/services/database';
     import { showUserDialog } from '@/coordinators/userCoordinator';
-    import { useFriendStore, useGameLogStore } from '@/stores';
-    import { formatDateFilter, openExternalLink } from '@/shared/utils';
+    import { useFriendStore, useGameLogStore, useHiddenFriendsStore } from '@/stores';
+    import { filterHiddenRows, formatDateFilter, openExternalLink } from '@/shared/utils';
     import { watchState } from '@/services/watchState';
 
     import { Button } from '@/components/ui/button';
@@ -189,6 +189,7 @@
     const { t } = useI18n();
     const friendStore = useFriendStore();
     const gameLogStore = useGameLogStore();
+    const hiddenFriendsStore = useHiddenFriendsStore();
 
     const widgetData = shallowRef([]);
     const maxEntries = 200;
@@ -233,7 +234,10 @@
 
     const filteredData = computed(() => {
         const filters = activeFilters.value;
-        return widgetData.value.filter((item) => filters.includes(item.type)).slice(0, maxEntries);
+        // Filtering here rather than in the loader keeps this reactive to the hidden
+        // list, and leaves the game log table on disk exactly as the host wrote it.
+        const visible = filterHiddenRows(widgetData.value, (item) => item.userId, hiddenFriendsStore.hiddenIds);
+        return visible.filter((item) => filters.includes(item.type)).slice(0, maxEntries);
     });
 
     async function loadInitialData() {

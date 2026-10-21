@@ -154,6 +154,7 @@
         useAppearanceSettingsStore,
         useChartsStore,
         useFriendStore,
+        useHiddenFriendsStore,
         useModalStore,
         useSearchStore,
         useUserStore
@@ -175,7 +176,8 @@
 
     const emit = defineEmits(['lookup-user']);
 
-    const { friends, allFavoriteFriendIds } = storeToRefs(useFriendStore());
+    const { friends, allFavoriteFriendIds, visibleSortedFriends } = storeToRefs(useFriendStore());
+    const hiddenFriendsStore = useHiddenFriendsStore();
     const modalStore = useModalStore();
     const { getAllUserStats, getAllUserMutualCount, getAllUserMutualOptedOut } = useFriendStore();
     const chartsStore = useChartsStore();
@@ -303,6 +305,16 @@
         }
     );
 
+    // Hiding or unhiding somebody does not change the roster, so nothing else here
+    // would notice. Without this the table keeps showing (or hiding) the person until
+    // the next friend arrives.
+    watch(
+        () => hiddenFriendsStore.count,
+        () => {
+            applyFriendsListSearchChange();
+        }
+    );
+
     onBeforeUnmount(() => {
         if (friendsListSearchTimer) {
             clearTimeout(friendsListSearchTimer);
@@ -410,7 +422,9 @@
             cleanedQuery = removeWhitespace(query);
             upperQuery = query.toUpperCase();
         }
-        for (const ctx of friends.value.values()) {
+        // The visible roster rather than the raw Map: a hidden friend has no row here,
+        // while the stats fetch below still covers them, so unhiding shows everything.
+        for (const ctx of visibleSortedFriends.value) {
             if (!ctx.ref) continue;
             if (friendsListSearchFilterVIP.value && !allFavoriteFriendIds.value.has(ctx.id)) continue;
             if (query) {

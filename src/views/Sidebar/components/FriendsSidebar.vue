@@ -196,6 +196,13 @@
                                             @click="friendInviteSelf(item.row.friend)">
                                             {{ t('dialog.user.info.self_invite_tooltip') }}
                                         </ContextMenuItem>
+                                        <ContextMenuSeparator />
+                                        <!-- The fastest way in, because the reason a person gets
+                                             hidden is usually something that just arrived from
+                                             them in this very list. -->
+                                        <ContextMenuItem @click="hideFriend(item.row.friend)">
+                                            {{ t('dialog.user.actions.hide_friend') }}
+                                        </ContextMenuItem>
                                     </ContextMenuContent>
                                 </ContextMenu>
                             </template>
@@ -237,6 +244,7 @@
         useFavoriteStore,
         useFriendStore,
         useGameStore,
+        useHiddenFriendsStore,
         useLaunchStore,
         useLocationStore,
         useUserStore
@@ -263,6 +271,7 @@
     const { t } = useI18n();
 
     const friendStore = useFriendStore();
+    const hiddenFriendsStore = useHiddenFriendsStore();
     const {
         allFavoriteOnlineFriends,
         allFavoriteFriendIds,
@@ -862,5 +871,24 @@
             .then(() => {
                 toast.success(t('message.invite.self_sent'));
             });
+    }
+
+    /**
+     * Hide this friend everywhere in VRCX. The name is stored with the entry because a
+     * person who unfriends you afterwards would otherwise leave a bare id on the hidden
+     * list with nothing to read next to it.
+     *
+     * @param {{ id: string; name?: string; displayName?: string; ref?: object }} friend
+     */
+    function hideFriend(friend) {
+        const name = friend.ref?.displayName || friend.displayName || friend.name || friend.id;
+        if (!hiddenFriendsStore.hide(friend.id, name)) {
+            return;
+        }
+        // Say where the undo is, because the row they just clicked on is gone from this
+        // list and a menu item that removes its own target needs an explanation.
+        toast.info(t('dialog.user.actions.hide_friend_done', { name }), {
+            description: t('dialog.user.actions.hide_friend_done_hint')
+        });
     }
 </script>

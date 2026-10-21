@@ -138,6 +138,57 @@
                     "already-handled": "Already handled",
                     "failed": "Send failed"
                 }
+            },
+            "hidden_friends": {
+                "tab_label": "Hidden friends",
+                "intro": "Some friends you cannot delete - a group mutual, somebody you collaborate with, somebody who would notice. Hiding takes that person out of every list, message and chart inside VRCX while leaving the friendship itself untouched.",
+                "keeps_recording": "Hiding is a pair of sunglasses, not a delete key. VRCX keeps polling them and keeps writing everything they do into its database, so unhiding shows the whole period they were hidden - all of it, at once.",
+                "list_title": "Hidden",
+                "list_empty": "Nobody is hidden.",
+                "unhide": "Unhide",
+                "pick_friend": "Choose a friend…",
+                "hide": "Hide",
+                "pick_from_sidebar": "You can also right-click a friend in the sidebar and choose \"Hide this friend\".",
+                "unhide_all": "Unhide everyone",
+                "unhide_all_hint": "Hiding deletes nothing, so this only brings people back into view.",
+                "unhide_all_confirm": "Show all {count} hidden friends again?",
+                "unhidden_toast": "Unhidden",
+                "unhidden_toast_hint": "Their history is back - it was being recorded the whole time they were hidden.",
+                "scope_title": "Where hiding has an effect",
+                "scope_list": "The sidebar, the Friends page, the locations page and the favourites list.",
+                "scope_feed": "The feed, the game log and every notification, including the desktop toast, the sound and the wrist overlay.",
+                "scope_charts": "The Candy charts: footprints, status lights, together, meetings, and the mutual-friends graph.",
+                "scope_not_game": "It is not blocking. Inside the game nothing changes - they can still join your room, still see you online and still message you."
+            },
+            "room_mutuals": {
+                "tab_label": "Shared friends in the room",
+                "intro": "A few seconds after you walk in, this lists the players who have friends in common with you - the quickest way to tell a stranger who came through your circle from one who did not.",
+                "opted_out": "You have turned off shared connections in VRChat’s own privacy settings, so there is nothing for VRCX to ask about anybody. Turn it back on there and this page fills in.",
+                "no_room": "You are not in a room right now, so there is nobody to look at.",
+                "list_title": "In this room",
+                "summary": "{players} players here · {withMutuals} share friends with you · {friends} are already your friends",
+                "refresh": "Look again",
+                "empty": "Nobody has joined yet.",
+                "state_mutual": "{friends} mutual friends",
+                "state_mutual_with_groups": "{friends} mutual friends · {groups} mutual groups",
+                "state_none": "No mutual friends",
+                "state_friend": "Your friend",
+                "state_pending": "Not looked up yet",
+                "state_skipped": "Past the limit, not looked up",
+                "state_denied": "They hide their connections",
+                "loading_names": "Loading…",
+                "no_names": "Could not read the names.",
+                "settings_title": "How it works",
+                "enable": "Look up shared friends in the room",
+                "enable_hint": "One request per stranger, a few seconds after you arrive. Nothing is looked up for your own friends.",
+                "notify": "Tell me when a room has somebody in common with me",
+                "notify_hint": "One line per room, when you walk in. Off by default.",
+                "limit": "Most players to look up per room",
+                "limit_hint": "A full public room is 40. Anyone past this is listed as not looked up.",
+                "cost_hint": "Answers are kept for 15 minutes, and a player who refuses is not asked again for an hour.",
+                "announce": "{count} players here share friends with you",
+                "only_shared": "Only those with mutual friends",
+                "no_shared": "Nobody here shares friends with you."
             }
         },
         "login": {
@@ -587,8 +638,7 @@
                 "row": {
                     "ongoing": "still here",
                     "unknown": "left offline"
-                },
-                "self_label": "Myself"
+                }
             },
             "friend_status_lights": {
                 "tab_label": "Status Lights",
@@ -1534,6 +1584,14 @@
                 "auto_invites": {
                     "title": "Auto-accept join requests",
                     "description": "Lets a short list of friends into your own room while you are on the yellow light and not at the keyboard. Stack the limits - daily ceiling, time window, yellow-light-only - and every accept and skip is written on the page. Under Candy, off by default."
+                },
+                "hidden_friends": {
+                    "title": "Hidden friends",
+                    "description": "Takes a friend out of every list, message, notification and chart inside VRCX without unfriending them - and without stopping the recording, so unhiding shows the whole time they were hidden. Hide them from the sidebar right-click, undo it under Candy."
+                },
+                "room_mutuals": {
+                    "title": "Shared friends in the room",
+                    "description": "A few seconds after you enter a room, VRCX asks which of the strangers there have friends in common with you and lists them by that number - open a name to see who they are. The player list gains a column with the same number, and the Candy page has the switch."
                 }
             },
             "reopen_hint": "This screen is shown once. You can open it again from the help button at the top of the sidebar.",
@@ -1629,7 +1687,10 @@
                 "group_moderation": "การดูแลกลุ่ม",
                 "unfriend_success_msg": "ลบเพื่อน",
                 "edit_note_memo": "แก้ไขโน้ตและบันทึกข้อความ",
-                "reset_home": "รีเซ็ตบ้าน"
+                "reset_home": "รีเซ็ตบ้าน",
+                "hide_friend": "Hide this friend",
+                "hide_friend_done": "{name} is hidden",
+                "hide_friend_done_hint": "They are gone from every list in VRCX. Nothing about them was deleted - undo it under Candy → Hidden friends."
             },
             "info": {
                 "header": "ข้อมูล",
@@ -3141,7 +3202,8 @@
             "date": "วันที่",
             "user": "ผู้ใช้",
             "type": "ประเภท",
-            "detail": "รายละเอียด"
+            "detail": "รายละเอียด",
+            "shared_friends": "Shared friends"
         },
         "friendLog": {
             "date": "วันที่",
